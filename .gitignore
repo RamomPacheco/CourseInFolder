@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+*.db
+.DS_Store
+
+.vscode/
+
+# cursor
+.cursor/
+
+#files
+*.txt   #arquivos de texto
+
+ESCOPO_E_MODIFICACOES.txt
+RESUMO_PROJETO.txt
