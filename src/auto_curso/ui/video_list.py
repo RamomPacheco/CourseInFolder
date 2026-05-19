@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from auto_curso.debug_log import debug_log
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
 
@@ -174,6 +175,19 @@ class VideoListPanel(QWidget):
         if not check:
             return
         completed = check.checkState() == Qt.CheckState.Checked
+        # region agent log
+        debug_log(
+            "video_list.py:_on_cell_changed",
+            "checkbox clicada",
+            {
+                "row": row,
+                "completed": completed,
+                "model_completed": video.is_completed,
+            },
+            hypothesis_id="H2",
+            run_id="post-fix",
+        )
+        # endregion
         self._completion_callback(video, completed)
 
     def _handle_double_click(self, row: int, col: int) -> None:

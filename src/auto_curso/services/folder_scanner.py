@@ -11,6 +11,17 @@ from auto_curso.models.video import ScannedVideoFile
 
 class FolderScanner:
     def scan(self, folder_path: str) -> list[ScannedVideoFile]:
+        """Escaneia uma pasta e retorna uma lista de arquivos de vídeo.
+
+        Args:
+            folder_path (str): O caminho da pasta a ser escaneada.
+
+        Raises:
+            FileNotFoundError: Se a pasta não for encontrada.
+
+        Returns:
+            list[ScannedVideoFile]: Uma lista de arquivos de vídeo.
+        """
         root = Path(folder_path).resolve()
         if not root.is_dir():
             raise FileNotFoundError(f"Pasta não encontrada: {root}")

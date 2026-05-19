@@ -2,6 +2,15 @@ from __future__ import annotations
 
 
 def format_seconds(seconds: float) -> str:
+    """Formata um número de segundos em um formato de tempo HH:MM:SS.
+
+    Args:
+        seconds (float): O número de segundos a ser formatado.
+
+    Returns:
+        str: O tempo formatado em HH:MM:SS.
+    """
+
     if seconds != seconds or seconds < 0:  # NaN check
         return "00:00"
     total = int(seconds)

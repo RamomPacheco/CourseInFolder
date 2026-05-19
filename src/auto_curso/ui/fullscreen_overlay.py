@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from auto_curso.debug_log import debug_log
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
 from auto_curso.services.playback_service import PlaybackService
@@ -52,10 +53,7 @@ class FullscreenOverlay(QWidget):
         self._controls_visible = True
         self._updating_checks = False
 
-        self.setWindowFlags(
-            Qt.WindowType.Window
-            | Qt.WindowType.FramelessWindowHint
-        )
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setMouseTracking(True)
         self.setStyleSheet(f"background-color: black; color: {t.TEXT_PRIMARY};")
@@ -223,15 +221,15 @@ class FullscreenOverlay(QWidget):
                 | Qt.ItemFlag.ItemIsEnabled
             )
             item.setCheckState(
-                Qt.CheckState.Checked
-                if video.is_completed
-                else Qt.CheckState.Unchecked
+                Qt.CheckState.Checked if video.is_completed else Qt.CheckState.Unchecked
             )
             self._list.addItem(item)
             self._row_to_video[row] = video
         self._list.blockSignals(False)
 
-    def update_progress(self, video_id: UUID, percent: float, is_completed: bool) -> None:
+    def update_progress(
+        self, video_id: UUID, percent: float, is_completed: bool
+    ) -> None:
         for row, video in self._row_to_video.items():
             if video.video.id != video_id:
                 continue
@@ -243,9 +241,7 @@ class FullscreenOverlay(QWidget):
                 break
             self._updating_checks = True
             item.setCheckState(
-                Qt.CheckState.Checked
-                if is_completed
-                else Qt.CheckState.Unchecked
+                Qt.CheckState.Checked if is_completed else Qt.CheckState.Unchecked
             )
             item.setText(self._list_label(video))
             self._updating_checks = False
@@ -257,7 +253,9 @@ class FullscreenOverlay(QWidget):
             return video.video.file_name
         if video.progress and video.progress.position_seconds > 0:
             stopped = format_seconds(video.progress.position_seconds)
-            return f"{video.video.file_name}  ({video.progress_percent:.0f}% · {stopped})"
+            return (
+                f"{video.video.file_name}  ({video.progress_percent:.0f}% · {stopped})"
+            )
         return f"{video.video.file_name}  ({video.progress_percent:.0f}%)"
 
     def set_resume_marker(self, video: VideoWithProgress | None) -> None:
@@ -359,4 +357,19 @@ class FullscreenOverlay(QWidget):
         if not video or not self._on_completion_changed:
             return
         completed = item.checkState() == Qt.CheckState.Checked
+        if completed == video.is_completed:
+            return
+        # region agent log
+        debug_log(
+            "fullscreen_overlay.py:_on_list_item_changed",
+            "itemChanged lista FS",
+            {
+                "row": row,
+                "completed": completed,
+                "model_completed": video.is_completed,
+            },
+            hypothesis_id="H3",
+            run_id="post-fix",
+        )
+        # endregion
         self._on_completion_changed(video, completed)

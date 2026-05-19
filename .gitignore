@@ -20,3 +20,6 @@ build/
 
 ESCOPO_E_MODIFICACOES.txt
 RESUMO_PROJETO.txt
+
+# Debug
+*.log

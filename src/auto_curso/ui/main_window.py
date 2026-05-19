@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from auto_curso.constants import COMPLETION_THRESHOLD
+from auto_curso.debug_log import debug_log
 from auto_curso.models.course import CourseSummary
 from auto_curso.models.video import VideoWithProgress
 from auto_curso.services.course_service import CourseService
@@ -279,6 +281,27 @@ class MainWindow(QMainWindow):
         if not course_id:
             return
 
+        # region agent log
+        debug_log(
+            "main_window.py:_set_video_completed",
+            "toggle manual",
+            {
+                "video": video.video.file_name,
+                "completed": completed,
+                "model_completed_before": video.is_completed,
+                "watched_pct": (
+                    video.progress.watched_percent if video.progress else None
+                ),
+                "is_selected": bool(
+                    self._selected_video
+                    and self._selected_video.video.id == video.video.id
+                ),
+            },
+            hypothesis_id="H1",
+            run_id="post-fix",
+        )
+        # endregion
+
         progress = self._courses.set_video_completed(video.video.id, completed)
         video.progress = progress
 
@@ -289,6 +312,19 @@ class MainWindow(QMainWindow):
 
         if self._selected_video and self._selected_video.video.id == video.video.id:
             self._selected_video.progress = progress
+
+        if (
+            not completed
+            and self._selected_video
+            and self._selected_video.video.id == video.video.id
+            and self._playback.has_media
+        ):
+            duration = self._playback.duration_seconds
+            if duration > 0:
+                threshold = duration * COMPLETION_THRESHOLD
+                if self._playback.position_seconds >= threshold:
+                    self._playback.seek(max(0.0, threshold - 1.0))
+                    self._playback.flush_save()
 
         summary = self._courses.get_course_summary(course_id)
         self._summaries[course_id] = summary
@@ -335,10 +371,21 @@ class MainWindow(QMainWindow):
             return
 
         now = time.monotonic()
-        is_completed = (
-            self._selected_video.is_completed
-            or state.watched_percent >= 95
-        )
+        is_completed = self._selected_video.is_completed
+        # region agent log
+        if state.watched_percent >= COMPLETION_THRESHOLD * 100 and not is_completed:
+            debug_log(
+                "main_window.py:_on_playback_state",
+                "pct alto mas modelo pendente (sem override UI)",
+                {
+                    "video": self._selected_video.video.file_name,
+                    "watched_percent": round(state.watched_percent, 1),
+                    "model_completed": is_completed,
+                },
+                hypothesis_id="H1",
+                run_id="post-fix",
+            )
+        # endregion
         if is_completed or (now - self._last_list_progress_update) >= 2.0:
             self._last_list_progress_update = now
             percent = 100.0 if is_completed else state.watched_percent

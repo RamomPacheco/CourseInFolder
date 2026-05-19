@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from auto_curso.constants import COMPLETION_THRESHOLD
 from auto_curso.models.course import Course, CourseSummary
 from auto_curso.models.progress import PlaybackProgress
 from auto_curso.models.video import Video, VideoWithProgress
@@ -76,11 +77,19 @@ class CourseService:
             )
         elif existing:
             percent = existing.watched_percent
-            if percent >= 100:
+            position = existing.position_seconds
+            threshold_pct = COMPLETION_THRESHOLD * 100
+            below_pct = (COMPLETION_THRESHOLD - 0.01) * 100
+            if percent >= threshold_pct:
+                old_pct = max(percent, threshold_pct)
+                percent = below_pct
+                if position > 0:
+                    position = position * (below_pct / old_pct)
+            elif percent >= 100:
                 percent = 99.0
             progress = PlaybackProgress(
                 video_id=video_id,
-                position_seconds=existing.position_seconds,
+                position_seconds=position,
                 is_completed=False,
                 watched_percent=percent,
                 last_watched_at=now,
