@@ -85,8 +85,6 @@ class CourseService:
                 percent = below_pct
                 if position > 0:
                     position = position * (below_pct / old_pct)
-            elif percent >= 100:
-                percent = 99.0
             progress = PlaybackProgress(
                 video_id=video_id,
                 position_seconds=position,

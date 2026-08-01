@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from auto_curso.debug_log import debug_log
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
 from auto_curso.services.playback_service import PlaybackService
@@ -243,20 +242,26 @@ class FullscreenOverlay(QWidget):
             item.setCheckState(
                 Qt.CheckState.Checked if is_completed else Qt.CheckState.Unchecked
             )
-            item.setText(self._list_label(video))
+            item.setText(self._live_list_label(video, percent, is_completed))
             self._updating_checks = False
             break
 
     @staticmethod
     def _list_label(video: VideoWithProgress) -> str:
-        if video.is_completed:
+        return FullscreenOverlay._live_list_label(
+            video, video.progress_percent, video.is_completed
+        )
+
+    @staticmethod
+    def _live_list_label(
+        video: VideoWithProgress, percent: float, is_completed: bool
+    ) -> str:
+        if is_completed:
             return video.video.file_name
         if video.progress and video.progress.position_seconds > 0:
             stopped = format_seconds(video.progress.position_seconds)
-            return (
-                f"{video.video.file_name}  ({video.progress_percent:.0f}% · {stopped})"
-            )
-        return f"{video.video.file_name}  ({video.progress_percent:.0f}%)"
+            return f"{video.video.file_name}  ({percent:.0f}% · {stopped})"
+        return f"{video.video.file_name}  ({percent:.0f}%)"
 
     def set_resume_marker(self, video: VideoWithProgress | None) -> None:
         self._resume_marker_sec = 0.0
@@ -359,17 +364,4 @@ class FullscreenOverlay(QWidget):
         completed = item.checkState() == Qt.CheckState.Checked
         if completed == video.is_completed:
             return
-        # region agent log
-        debug_log(
-            "fullscreen_overlay.py:_on_list_item_changed",
-            "itemChanged lista FS",
-            {
-                "row": row,
-                "completed": completed,
-                "model_completed": video.is_completed,
-            },
-            hypothesis_id="H3",
-            run_id="post-fix",
-        )
-        # endregion
         self._on_completion_changed(video, completed)

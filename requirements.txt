@@ -1,11 +1,6 @@
-# Editable Git install with no remote (auto-curso==1.0.0)
--e e:\dev\projetos_python\auto_curso
-customtkinter==5.2.2
-darkdetect==0.8.0
 natsort==8.4.0
 packaging==26.2
 PySide6==6.11.1
 PySide6_Addons==6.11.1
 PySide6_Essentials==6.11.1
-python-vlc==3.0.21203
 shiboken6==6.11.1

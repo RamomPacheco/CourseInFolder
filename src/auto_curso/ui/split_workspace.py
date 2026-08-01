@@ -139,8 +139,12 @@ class SplitWorkspace(QWidget):
         if idx < len(new_sizes):
             freed = new_sizes[idx] - 32
             new_sizes[idx] = 32
-            if freed > 0 and idx + 1 < len(new_sizes):
-                new_sizes[idx + 1] += freed
+            if freed > 0:
+                target = self._next_visible_index(idx, 1, len(new_sizes))
+                if target is None:
+                    target = self._next_visible_index(idx, -1, len(new_sizes))
+                if target is not None:
+                    new_sizes[target] += freed
             self._splitter.setSizes(new_sizes)
 
         self._sync_toolbar_buttons()
@@ -178,6 +182,15 @@ class SplitWorkspace(QWidget):
     def _pane_index(self, key: str) -> int:
         order = [self.PANE_COURSES, self.PANE_VIDEOS, self.PANE_PLAYER]
         return order.index(key)
+
+    def _next_visible_index(self, idx: int, step: int, count: int) -> int | None:
+        order = [self.PANE_COURSES, self.PANE_VIDEOS, self.PANE_PLAYER]
+        i = idx + step
+        while 0 <= i < count:
+            if self._visible.get(order[i], True):
+                return i
+            i += step
+        return None
 
     def _sync_toolbar_buttons(self) -> None:
         for key, btn in (

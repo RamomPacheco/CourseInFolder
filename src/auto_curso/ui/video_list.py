@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from auto_curso.debug_log import debug_log
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
 
@@ -153,17 +152,25 @@ class VideoListPanel(QWidget):
             if video.progress:
                 video.progress.watched_percent = percent
                 video.progress.is_completed = is_completed
-            self._table.item(row, self._COL_PROGRESS).setText(self._progress_label(video))
+            self._table.item(row, self._COL_PROGRESS).setText(
+                self._live_progress_label(video, percent, is_completed)
+            )
             self._updating_checks = False
             break
 
     def _progress_label(self, video: VideoWithProgress) -> str:
-        if video.is_completed:
+        return self._live_progress_label(video, video.progress_percent, video.is_completed)
+
+    @staticmethod
+    def _live_progress_label(
+        video: VideoWithProgress, percent: float, is_completed: bool
+    ) -> str:
+        if is_completed:
             return "Concluído"
         if video.progress and video.progress.position_seconds > 0:
             stopped = format_seconds(video.progress.position_seconds)
-            return f"{video.progress_percent:.0f}% · parou em {stopped}"
-        return f"{video.progress_percent:.0f}%"
+            return f"{percent:.0f}% · parou em {stopped}"
+        return f"{percent:.0f}%"
 
     def _on_cell_changed(self, row: int, column: int) -> None:
         if column != self._COL_CHECK or self._updating_checks:
@@ -175,19 +182,6 @@ class VideoListPanel(QWidget):
         if not check:
             return
         completed = check.checkState() == Qt.CheckState.Checked
-        # region agent log
-        debug_log(
-            "video_list.py:_on_cell_changed",
-            "checkbox clicada",
-            {
-                "row": row,
-                "completed": completed,
-                "model_completed": video.is_completed,
-            },
-            hypothesis_id="H2",
-            run_id="post-fix",
-        )
-        # endregion
         self._completion_callback(video, completed)
 
     def _handle_double_click(self, row: int, col: int) -> None:
