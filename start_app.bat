@@ -5,34 +5,18 @@ REM Uso: start_app.bat  (duplo clique ou no cmd/PowerShell)
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-set "VENV_DIR=%CD%\.venv"
-
-if not exist "%VENV_DIR%\Scripts\python.exe" (
-    if exist "%CD%\venv\Scripts\python.exe" (
-        set "VENV_DIR=%CD%\venv"
-    ) else (
-        echo Criando ambiente virtual em .venv ...
-        py -3 -m venv "%CD%\.venv" 2>nul || python -m venv "%CD%\.venv"
-        if errorlevel 1 (
-            echo Erro ao criar o ambiente virtual. Instale Python 3.11+.
-            exit /b 1
-        )
-        set "VENV_DIR=%CD%\.venv"
-    )
-)
-
-call "%VENV_DIR%\Scripts\activate.bat"
+where uv >nul 2>nul
 if errorlevel 1 (
-    echo Nao foi possivel ativar o ambiente virtual em: %VENV_DIR%
+    echo uv nao encontrado no PATH.
+    echo Instale em: https://docs.astral.sh/uv/getting-started/installation/
     exit /b 1
 )
 
-python -m pip install -q --upgrade pip
-pip install -q -e .
+uv sync
 if errorlevel 1 (
-    echo Erro ao instalar dependencias.
+    echo Erro ao instalar dependencias com uv.
     exit /b 1
 )
 
-python -m auto_curso
+uv run python -m auto_curso
 exit /b %ERRORLEVEL%

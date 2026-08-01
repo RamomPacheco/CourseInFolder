@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Callable
 from uuid import UUID
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -18,6 +19,9 @@ from PySide6.QtWidgets import (
 
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
+from auto_curso.services.thumbnail_service import thumbnail_path_for
+
+_THUMB_ICON_SIZE = QSize(80, 45)
 
 
 class VideoListPanel(QWidget):
@@ -68,6 +72,8 @@ class VideoListPanel(QWidget):
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
+        self._table.setIconSize(_THUMB_ICON_SIZE)
+        self._table.verticalHeader().setDefaultSectionSize(50)
         header = self._table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(self._COL_TITLE, header.ResizeMode.Stretch)
@@ -128,6 +134,9 @@ class VideoListPanel(QWidget):
             progress_text = self._progress_label(video)
 
             title_item = QTableWidgetItem(video.video.file_name)
+            thumb_path = thumbnail_path_for(video.video.id, video.video.file_size_bytes)
+            if thumb_path.exists():
+                title_item.setIcon(QIcon(str(thumb_path)))
             self._table.setItem(row, self._COL_TITLE, title_item)
             self._table.setItem(row, self._COL_DURATION, QTableWidgetItem(duration_text))
             self._table.setItem(row, self._COL_PROGRESS, QTableWidgetItem(progress_text))
@@ -156,6 +165,15 @@ class VideoListPanel(QWidget):
                 self._live_progress_label(video, percent, is_completed)
             )
             self._updating_checks = False
+            break
+
+    def set_thumbnail(self, video_id: UUID, path: str) -> None:
+        for row, video in self._row_to_video.items():
+            if video.video.id != video_id:
+                continue
+            item = self._table.item(row, self._COL_TITLE)
+            if item:
+                item.setIcon(QIcon(path))
             break
 
     def _progress_label(self, video: VideoWithProgress) -> str:
