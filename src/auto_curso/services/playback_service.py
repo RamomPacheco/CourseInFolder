@@ -60,6 +60,8 @@ class PlaybackService:
         self._awaiting_resume = False
         self._resume_at_ms = 0
         self._last_saved_signature: tuple | None = None
+        self._save_pool = QThreadPool()
+        self._save_pool.setMaxThreadCount(1)
 
         self.on_state_changed: Callable[[PlaybackState], None] | None = None
         self.on_completed: Callable[[], None] | None = None
@@ -258,7 +260,7 @@ class PlaybackService:
                 else:
                     vid = self._current.video.id
                     dur = duration_ms / 1000.0
-                    QThreadPool.globalInstance().start(
+                    self._save_pool.start(
                         _UpdateDurationTask(self._courses, vid, dur)
                     )
 
@@ -267,9 +269,7 @@ class PlaybackService:
             if self.on_progress_persisted:
                 self.on_progress_persisted()
         else:
-            QThreadPool.globalInstance().start(
-                _SaveProgressTask(self._progress, progress)
-            )
+            self._save_pool.start(_SaveProgressTask(self._progress, progress))
 
         if progress.is_completed and self.on_completed:
             QTimer.singleShot(0, self.on_completed)

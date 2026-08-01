@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Callable
 from uuid import UUID
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QCursor
+from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtGui import QCursor, QIcon
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QFrame,
@@ -17,15 +17,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from auto_curso.debug_log import debug_log
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
 from auto_curso.services.playback_service import PlaybackService
+from auto_curso.services.thumbnail_service import thumbnail_path_for
 from auto_curso.ui import theme as t
 from auto_curso.ui.seek_bar import SeekBarController
 from auto_curso.ui.timeline_slider import TimelineSlider
 
 _HIDE_MS = 2500
+_THUMB_ICON_SIZE = QSize(80, 45)
 
 
 class FullscreenOverlay(QWidget):
@@ -161,6 +162,7 @@ class FullscreenOverlay(QWidget):
         sidebar_layout.addLayout(header)
 
         self._list = QListWidget()
+        self._list.setIconSize(_THUMB_ICON_SIZE)
         self._list.itemDoubleClicked.connect(self._on_list_double_click)
         self._list.itemChanged.connect(self._on_list_item_changed)
         sidebar_layout.addWidget(self._list)
@@ -223,9 +225,21 @@ class FullscreenOverlay(QWidget):
             item.setCheckState(
                 Qt.CheckState.Checked if video.is_completed else Qt.CheckState.Unchecked
             )
+            thumb_path = thumbnail_path_for(video.video.id, video.video.file_size_bytes)
+            if thumb_path.exists():
+                item.setIcon(QIcon(str(thumb_path)))
             self._list.addItem(item)
             self._row_to_video[row] = video
         self._list.blockSignals(False)
+
+    def set_thumbnail(self, video_id: UUID, path: str) -> None:
+        for row, video in self._row_to_video.items():
+            if video.video.id != video_id:
+                continue
+            item = self._list.item(row)
+            if item:
+                item.setIcon(QIcon(path))
+            break
 
     def update_progress(
         self, video_id: UUID, percent: float, is_completed: bool
@@ -243,20 +257,26 @@ class FullscreenOverlay(QWidget):
             item.setCheckState(
                 Qt.CheckState.Checked if is_completed else Qt.CheckState.Unchecked
             )
-            item.setText(self._list_label(video))
+            item.setText(self._live_list_label(video, percent, is_completed))
             self._updating_checks = False
             break
 
     @staticmethod
     def _list_label(video: VideoWithProgress) -> str:
-        if video.is_completed:
+        return FullscreenOverlay._live_list_label(
+            video, video.progress_percent, video.is_completed
+        )
+
+    @staticmethod
+    def _live_list_label(
+        video: VideoWithProgress, percent: float, is_completed: bool
+    ) -> str:
+        if is_completed:
             return video.video.file_name
         if video.progress and video.progress.position_seconds > 0:
             stopped = format_seconds(video.progress.position_seconds)
-            return (
-                f"{video.video.file_name}  ({video.progress_percent:.0f}% · {stopped})"
-            )
-        return f"{video.video.file_name}  ({video.progress_percent:.0f}%)"
+            return f"{video.video.file_name}  ({percent:.0f}% · {stopped})"
+        return f"{video.video.file_name}  ({percent:.0f}%)"
 
     def set_resume_marker(self, video: VideoWithProgress | None) -> None:
         self._resume_marker_sec = 0.0
@@ -359,17 +379,4 @@ class FullscreenOverlay(QWidget):
         completed = item.checkState() == Qt.CheckState.Checked
         if completed == video.is_completed:
             return
-        # region agent log
-        debug_log(
-            "fullscreen_overlay.py:_on_list_item_changed",
-            "itemChanged lista FS",
-            {
-                "row": row,
-                "completed": completed,
-                "model_completed": video.is_completed,
-            },
-            hypothesis_id="H3",
-            run_id="post-fix",
-        )
-        # endregion
         self._on_completion_changed(video, completed)

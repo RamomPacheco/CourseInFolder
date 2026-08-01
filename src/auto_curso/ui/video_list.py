@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Callable
 from uuid import UUID
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -16,9 +17,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from auto_curso.debug_log import debug_log
 from auto_curso.helpers import format_seconds
 from auto_curso.models.video import VideoWithProgress
+from auto_curso.services.thumbnail_service import thumbnail_path_for
+
+_THUMB_ICON_SIZE = QSize(80, 45)
 
 
 class VideoListPanel(QWidget):
@@ -69,6 +72,8 @@ class VideoListPanel(QWidget):
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
+        self._table.setIconSize(_THUMB_ICON_SIZE)
+        self._table.verticalHeader().setDefaultSectionSize(50)
         header = self._table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(self._COL_TITLE, header.ResizeMode.Stretch)
@@ -129,6 +134,9 @@ class VideoListPanel(QWidget):
             progress_text = self._progress_label(video)
 
             title_item = QTableWidgetItem(video.video.file_name)
+            thumb_path = thumbnail_path_for(video.video.id, video.video.file_size_bytes)
+            if thumb_path.exists():
+                title_item.setIcon(QIcon(str(thumb_path)))
             self._table.setItem(row, self._COL_TITLE, title_item)
             self._table.setItem(row, self._COL_DURATION, QTableWidgetItem(duration_text))
             self._table.setItem(row, self._COL_PROGRESS, QTableWidgetItem(progress_text))
@@ -153,17 +161,34 @@ class VideoListPanel(QWidget):
             if video.progress:
                 video.progress.watched_percent = percent
                 video.progress.is_completed = is_completed
-            self._table.item(row, self._COL_PROGRESS).setText(self._progress_label(video))
+            self._table.item(row, self._COL_PROGRESS).setText(
+                self._live_progress_label(video, percent, is_completed)
+            )
             self._updating_checks = False
             break
 
+    def set_thumbnail(self, video_id: UUID, path: str) -> None:
+        for row, video in self._row_to_video.items():
+            if video.video.id != video_id:
+                continue
+            item = self._table.item(row, self._COL_TITLE)
+            if item:
+                item.setIcon(QIcon(path))
+            break
+
     def _progress_label(self, video: VideoWithProgress) -> str:
-        if video.is_completed:
+        return self._live_progress_label(video, video.progress_percent, video.is_completed)
+
+    @staticmethod
+    def _live_progress_label(
+        video: VideoWithProgress, percent: float, is_completed: bool
+    ) -> str:
+        if is_completed:
             return "Concluído"
         if video.progress and video.progress.position_seconds > 0:
             stopped = format_seconds(video.progress.position_seconds)
-            return f"{video.progress_percent:.0f}% · parou em {stopped}"
-        return f"{video.progress_percent:.0f}%"
+            return f"{percent:.0f}% · parou em {stopped}"
+        return f"{percent:.0f}%"
 
     def _on_cell_changed(self, row: int, column: int) -> None:
         if column != self._COL_CHECK or self._updating_checks:
@@ -175,19 +200,6 @@ class VideoListPanel(QWidget):
         if not check:
             return
         completed = check.checkState() == Qt.CheckState.Checked
-        # region agent log
-        debug_log(
-            "video_list.py:_on_cell_changed",
-            "checkbox clicada",
-            {
-                "row": row,
-                "completed": completed,
-                "model_completed": video.is_completed,
-            },
-            hypothesis_id="H2",
-            run_id="post-fix",
-        )
-        # endregion
         self._completion_callback(video, completed)
 
     def _handle_double_click(self, row: int, col: int) -> None:

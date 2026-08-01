@@ -5,22 +5,26 @@ Aplicativo desktop para acompanhar o progresso de estudos em pastas de vídeo. C
 ## Requisitos
 
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/) para instalar dependências e rodar o projeto
 - PySide6 (reprodutor multimídia nativo do Qt — áudio e vídeo)
 
 ## Instalação
 
 ```bash
-cd auto_curso
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
 ```
+
+O `uv` cria o ambiente virtual (`.venv`) e instala as dependências automaticamente (versão do Python fixada em `.python-version`).
 
 ## Executar
 
 ```bash
-python -m auto_curso
+uv run python -m auto_curso
 ```
+
+Ou, com o ambiente ativado manualmente: `auto-curso` / `python -m auto_curso`.
+
+No Windows, também é possível usar `start_app.bat` (duplo clique) e no Linux/macOS `./start_app.sh`.
 
 ## Uso
 
@@ -47,6 +51,11 @@ python -m auto_curso
 
 - Windows: `%APPDATA%\auto_curso\data.db`
 - Linux/macOS: `~/.local/share/auto_curso/data.db`
+- Miniaturas (thumbnails): mesma pasta, em `thumbnails/`
+
+## Miniaturas dos vídeos
+
+A lista mostra uma miniatura (frame do vídeo) por linha, gerada em segundo plano e cacheada em disco — o vídeo completo só é carregado no player quando você dá play. A geração processa um vídeo por vez e pausa automaticamente enquanto algo estiver tocando, para não competir por CPU com a reprodução.
 
 ## Conclusão automática
 

@@ -12,11 +12,11 @@ from PySide6.QtWidgets import (
 )
 
 from auto_curso.constants import COMPLETION_THRESHOLD
-from auto_curso.debug_log import debug_log
 from auto_curso.models.course import CourseSummary
 from auto_curso.models.video import VideoWithProgress
 from auto_curso.services.course_service import CourseService
 from auto_curso.services.playback_service import PlaybackService, PlaybackState
+from auto_curso.services.thumbnail_service import ThumbnailService
 from auto_curso.ui import theme as t
 from auto_curso.ui.course_sidebar import CourseSidebar
 from auto_curso.ui.fullscreen_overlay import FullscreenOverlay
@@ -45,10 +45,13 @@ class MainWindow(QMainWindow):
         self,
         course_service: CourseService,
         playback_service: PlaybackService,
+        thumbnail_service: ThumbnailService,
     ) -> None:
         super().__init__()
         self._courses = course_service
         self._playback = playback_service
+        self._thumbnails = thumbnail_service
+        self._thumbnails.thumbnail_ready.connect(self._on_thumbnail_ready)
         self._summaries: dict[UUID, CourseSummary] = {}
         self._all_videos: list[VideoWithProgress] = []
         self._filtered_videos: list[VideoWithProgress] = []
@@ -207,6 +210,12 @@ class MainWindow(QMainWindow):
             return
         self._all_videos = videos
         self._apply_filter(self._video_list.get_filter())
+        self._thumbnails.request_many(videos)
+
+    def _on_thumbnail_ready(self, video_id: UUID, path: str) -> None:
+        self._video_list.set_thumbnail(video_id, path)
+        if self._fullscreen:
+            self._fullscreen.set_thumbnail(video_id, path)
 
     def _apply_filter(self, filter_name: str) -> None:
         if filter_name == "Pendentes":
@@ -244,6 +253,7 @@ class MainWindow(QMainWindow):
             self._sidebar.update_course(summary)
             self._all_videos = videos
             self._apply_filter(self._video_list.get_filter())
+            self._thumbnails.request_many(videos)
             self._status(f"Curso atualizado: {summary.total_videos} vídeo(s).")
 
         self._run_async(work, done)
@@ -280,27 +290,6 @@ class MainWindow(QMainWindow):
         course_id = self._sidebar.get_selected_id()
         if not course_id:
             return
-
-        # region agent log
-        debug_log(
-            "main_window.py:_set_video_completed",
-            "toggle manual",
-            {
-                "video": video.video.file_name,
-                "completed": completed,
-                "model_completed_before": video.is_completed,
-                "watched_pct": (
-                    video.progress.watched_percent if video.progress else None
-                ),
-                "is_selected": bool(
-                    self._selected_video
-                    and self._selected_video.video.id == video.video.id
-                ),
-            },
-            hypothesis_id="H1",
-            run_id="post-fix",
-        )
-        # endregion
 
         progress = self._courses.set_video_completed(video.video.id, completed)
         video.progress = progress
@@ -356,6 +345,7 @@ class MainWindow(QMainWindow):
             self._fullscreen.set_resume_marker(video)
 
     def _on_playback_state(self, state: PlaybackState) -> None:
+        self._thumbnails.notify_playing(state.is_playing)
         self._player.update_state(
             state.position_seconds,
             state.duration_seconds,
@@ -372,20 +362,6 @@ class MainWindow(QMainWindow):
 
         now = time.monotonic()
         is_completed = self._selected_video.is_completed
-        # region agent log
-        if state.watched_percent >= COMPLETION_THRESHOLD * 100 and not is_completed:
-            debug_log(
-                "main_window.py:_on_playback_state",
-                "pct alto mas modelo pendente (sem override UI)",
-                {
-                    "video": self._selected_video.video.file_name,
-                    "watched_percent": round(state.watched_percent, 1),
-                    "model_completed": is_completed,
-                },
-                hypothesis_id="H1",
-                run_id="post-fix",
-            )
-        # endregion
         if is_completed or (now - self._last_list_progress_update) >= 2.0:
             self._last_list_progress_update = now
             percent = 100.0 if is_completed else state.watched_percent
