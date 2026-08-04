@@ -57,3 +57,21 @@ Vídeo marcado como concluído ao atingir **95%** da duração.
 - **UI:** PySide6
 - **Player:** QMediaPlayer + QVideoWidget (multimídia nativa)
 - **Banco:** SQLite
+
+## Gerar executável
+
+PyInstaller não faz cross-compile: rode o script no mesmo sistema operacional do executável desejado.
+
+**Windows** (gera `dist\auto-curso.exe`):
+
+```bat
+build_windows.bat
+```
+
+**Linux** (gera `dist/auto-curso`):
+
+```bash
+./build_linux.sh
+```
+
+Ambos usam a configuração em `auto_curso.spec` (build "onefile", sem console).
