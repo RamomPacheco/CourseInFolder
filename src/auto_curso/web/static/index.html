@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Video Learning Tracker</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+<div id="app">
+  <div class="nav">
+    <div class="nav-brand">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5-10-5Z" stroke-linejoin="round"/><path d="M6 10.5V16c0 1.5 2.5 3 6 3s6-1.5 6-3v-5.5" stroke-linejoin="round"/></svg>
+      Video Learning Tracker
+    </div>
+    <div class="nav-search">
+      <input class="input" id="search-input" type="text" placeholder="Buscar cursos..." />
+    </div>
+    <button class="btn btn-primary" id="add-course-btn">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke-linejoin="round"/><path d="M12 11v5M9.5 13.5h5"/></svg>
+      Adicionar curso
+    </button>
+  </div>
+
+  <main>
+    <!-- LIBRARY VIEW -->
+    <section id="view-library">
+      <div id="continue-watching-wrap"></div>
+
+      <h2 class="section-title">Meus cursos</h2>
+      <div id="course-grid" class="course-grid"></div>
+    </section>
+
+    <!-- COURSE VIEW -->
+    <section id="view-course" class="hidden">
+      <button class="btn btn-ghost" id="back-btn">&larr; Cursos</button>
+      <div class="course-header">
+        <h2 id="course-title">&nbsp;</h2>
+        <div class="filter-seg" id="filter-seg">
+          <button data-filter="all" class="active">Todos</button>
+          <button data-filter="pending">Pendentes</button>
+          <button data-filter="done">Concluídos</button>
+        </div>
+        <button class="btn btn-secondary" id="refresh-course-btn">Atualizar</button>
+        <button class="btn btn-secondary" id="remove-course-btn">Remover</button>
+      </div>
+
+      <div class="course-layout">
+        <div class="card elev-sm" style="padding:0;">
+          <table class="table" id="video-table">
+            <thead>
+              <tr><th></th><th>Vídeo</th><th>Duração</th><th>Progresso</th></tr>
+            </thead>
+            <tbody id="video-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="player-panel card elev-sm">
+          <div id="player-empty" class="player-empty">Selecione um vídeo na lista</div>
+          <div id="player-video-wrap" class="player-video-wrap hidden">
+            <video id="player-video" controls></video>
+          </div>
+          <div id="player-title" class="player-title"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ADD COURSE / FOLDER BROWSER DIALOG -->
+<div id="browse-dialog" class="dialog-backdrop hidden">
+  <div class="dialog" style="height:520px;">
+    <div class="dialog-title">Adicionar curso</div>
+    <div class="dialog-body">Escolha a pasta que contém os vídeos do curso.</div>
+    <div class="browse-path" id="browse-path"></div>
+    <ul class="browse-list" id="browse-list"></ul>
+    <div class="field" style="margin-top:4px;">
+      <label for="browse-manual-path">Ou informe o caminho diretamente</label>
+      <input class="input" id="browse-manual-path" type="text" placeholder="/caminho/para/o/curso" />
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="browse-cancel-btn">Cancelar</button>
+      <button class="btn btn-primary" id="browse-select-btn">Selecionar esta pasta</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

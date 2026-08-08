@@ -53,6 +53,18 @@ class ProgressRepository:
                 ),
             )
 
+    def get_most_recent_in_progress(self) -> PlaybackProgress | None:
+        with get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT VideoId, PositionSeconds, IsCompleted, WatchedPercent, LastWatchedAt
+                FROM PlaybackProgress
+                WHERE IsCompleted = 0 AND PositionSeconds > 0
+                ORDER BY LastWatchedAt DESC LIMIT 1
+                """
+            ).fetchone()
+        return _read_progress(row) if row else None
+
     def get_completed_count(self, course_id: UUID) -> int:
         with get_connection() as conn:
             row = conn.execute(

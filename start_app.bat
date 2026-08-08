@@ -1,6 +1,7 @@
 @echo off
-REM Inicia o Video Learning Tracker (auto_curso)
+REM Inicia o Video Learning Tracker (auto_curso) - app web local
 REM Uso: start_app.bat  (duplo clique ou no cmd/PowerShell)
+REM Abre automaticamente http://127.0.0.1:8765 no navegador
 
 setlocal EnableExtensions
 cd /d "%~dp0"

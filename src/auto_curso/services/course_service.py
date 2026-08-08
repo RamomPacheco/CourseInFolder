@@ -105,6 +105,49 @@ class CourseService:
         self._progress.save(progress)
         return progress
 
+    def save_progress(
+        self, video_id: UUID, position_seconds: float, duration_seconds: float | None
+    ) -> PlaybackProgress:
+        video = self._courses.get_video(video_id)
+        if video is None:
+            raise ValueError("Vídeo não encontrado.")
+
+        if duration_seconds and duration_seconds > 0 and video.duration_seconds is None:
+            self._courses.update_video_duration(video_id, duration_seconds)
+
+        effective_duration = duration_seconds or video.duration_seconds or 0.0
+        if effective_duration > 0:
+            percent = min(100.0, position_seconds / effective_duration * 100)
+            is_completed = position_seconds / effective_duration >= COMPLETION_THRESHOLD
+        else:
+            percent = 0.0
+            is_completed = False
+
+        progress = PlaybackProgress(
+            video_id=video_id,
+            position_seconds=0.0 if is_completed else position_seconds,
+            is_completed=is_completed,
+            watched_percent=100.0 if is_completed else percent,
+            last_watched_at=datetime.now(timezone.utc),
+        )
+        self._progress.save(progress)
+        return progress
+
+    def get_continue_watching(self) -> tuple[VideoWithProgress, Course] | None:
+        progress = self._progress.get_most_recent_in_progress()
+        if progress is None:
+            return None
+        video = self._courses.get_video(progress.video_id)
+        if video is None:
+            return None
+        course = self._courses.get_by_id(video.course_id)
+        if course is None:
+            return None
+        return (
+            VideoWithProgress(video=video, progress=progress, course_folder_path=course.folder_path),
+            course,
+        )
+
     def get_videos_with_progress(self, course_id: UUID) -> list[VideoWithProgress]:
         course = self._courses.get_by_id(course_id)
         if course is None:

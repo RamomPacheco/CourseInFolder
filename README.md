@@ -1,43 +1,34 @@
 # Video Learning Tracker (Python)
 
-Aplicativo desktop para acompanhar o progresso de estudos em pastas de vídeo. Cada pasta é um **curso**; o app salva onde você parou e retoma na mesma posição.
+Aplicativo web local para acompanhar o progresso de estudos em pastas de vídeo. Cada pasta é um **curso**; o app salva onde você parou e retoma na mesma posição. Roda 100% na sua máquina: um servidor FastAPI local serve a interface web e os vídeos direto do seu disco.
 
 ## Requisitos
 
 - Python 3.11+
-- PySide6 (reprodutor multimídia nativo do Qt — áudio e vídeo)
 
 ## Instalação
 
 ```bash
-cd auto_curso
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
 ```
+
+(ou `pip install -e .` num virtualenv)
 
 ## Executar
 
 ```bash
-python -m auto_curso
+uv run auto-curso-web
 ```
+
+Abre automaticamente `http://127.0.0.1:8765` no navegador padrão.
 
 ## Uso
 
-1. Clique em **+ Adicionar curso** e escolha uma pasta com vídeos.
-2. Dê duplo clique em um vídeo para reproduzir (retoma de onde parou).
+1. Clique em **Adicionar curso** e navegue até a pasta com os vídeos.
+2. Clique num vídeo na lista para reproduzir (retoma de onde parou).
 3. Use os filtros: Todos / Pendentes / Concluídos.
 4. **Atualizar** reescaneia a pasta (novos arquivos entram; removidos saem).
-5. **Tela cheia** no player ou tecla **F11**.
-
-## Atalhos
-
-| Tecla | Ação |
-|-------|------|
-| Espaço | Play / Pause |
-| ← | Voltar 10 s |
-| → | Avançar 10 s |
-| F11 | Tela cheia |
+5. Marque/desmarque manualmente a caixa de concluído em qualquer vídeo.
 
 ## Extensões suportadas
 
@@ -54,24 +45,7 @@ Vídeo marcado como concluído ao atingir **95%** da duração.
 
 ## Tecnologia
 
-- **UI:** PySide6
-- **Player:** QMediaPlayer + QVideoWidget (multimídia nativa)
+- **Backend:** FastAPI + Uvicorn (rodando localmente, sem exposição externa)
+- **Player:** tag `<video>` nativa do navegador, streaming com suporte a `Range` (permite avançar/retroceder)
+- **Frontend:** HTML/CSS/JS estáticos (sem build step), design system "Nocturne" (o mesmo do protótipo `CourseVault.dc.html`)
 - **Banco:** SQLite
-
-## Gerar executável
-
-PyInstaller não faz cross-compile: rode o script no mesmo sistema operacional do executável desejado.
-
-**Windows** (gera `dist\auto-curso.exe`):
-
-```bat
-build_windows.bat
-```
-
-**Linux** (gera `dist/auto-curso`):
-
-```bash
-./build_linux.sh
-```
-
-Ambos usam a configuração em `auto_curso.spec` (build "onefile", sem console).

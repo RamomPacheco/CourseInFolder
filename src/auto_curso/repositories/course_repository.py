@@ -96,6 +96,17 @@ class CourseRepository:
                     ),
                 )
 
+    def get_video(self, video_id: UUID) -> Video | None:
+        with get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT Id, CourseId, RelativePath, FileName, SortOrder, FileSizeBytes, DurationSeconds
+                FROM Videos WHERE Id = ?
+                """,
+                (str(video_id),),
+            ).fetchone()
+        return _read_video(row) if row else None
+
     def update_video_duration(self, video_id: UUID, duration_seconds: float) -> None:
         with get_connection() as conn:
             conn.execute(

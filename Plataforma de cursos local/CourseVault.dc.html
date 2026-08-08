@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-bee9eb9b-bb5f-41c6-94b7-cbe9ed685038/styles.css">
+  <script src="_ds/nocturne-bee9eb9b-bb5f-41c6-94b7-cbe9ed685038/_ds_bundle.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+  <style>
+    body{margin:0;}
+    a{color:var(--color-accent-300);}
+    a:hover{color:var(--color-accent);}
+    ::-webkit-scrollbar{width:8px;height:8px;}
+    ::-webkit-scrollbar-thumb{background:var(--color-neutral-700);border-radius:8px;}
+  </style>
+</helmet>
+<div style="min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);display:flex;flex-direction:column;">
+  <div class="nav" style="justify-content:space-between;gap:var(--space-4);">
+    <div class="nav-brand" style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer;" onClick="{{ openLibrary }}">
+      <i class="ph-fill ph-graduation-cap" style="font-size:20px;color:var(--color-accent);"></i>
+      CourseVault
+    </div>
+    <div style="flex:1;max-width:420px;">
+      <input class="input" type="text" placeholder="Buscar cursos ou aulas..." value="{{ query }}" onChange="{{ setQuery }}" />
+    </div>
+    <div style="display:flex;gap:var(--space-2);align-items:center;">
+      <sc-if value="{{ showDemoTag }}"><span class="tag tag-outline" title="Este navegador/ambiente não permite selecionar pastas locais">Modo demonstração</span></sc-if>
+      <button class="btn btn-primary" onClick="{{ pickCourseFolder }}"><i class="ph ph-folder-plus"></i> Adicionar curso</button>
+    </div>
+  </div>
+
+  <sc-if value="{{ isLibraryView }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:var(--space-6);overflow-y:auto;flex:1;">
+      <sc-if value="{{ showContinueSection }}">
+        <div style="margin-bottom:var(--space-6);">
+          <h2 style="font-family:var(--font-heading);font-weight:500;font-size:18px;margin:0 0 var(--space-3) 0;">Continuar assistindo</h2>
+          <div style="display:flex;gap:var(--space-4);overflow-x:auto;padding-bottom:var(--space-2);">
+            <sc-for list="{{ continueList }}" as="item" hint-placeholder-count="3">
+              <div class="card elev-sm" style="min-width:260px;max-width:260px;cursor:pointer;padding:0;overflow:hidden;" onClick="{{ item.onResume }}">
+                <div style="height:110px;background:linear-gradient(135deg,var(--color-accent-800),var(--color-accent-600));display:flex;align-items:center;justify-content:center;">
+                  <i class="ph-fill ph-play-circle" style="font-size:32px;color:var(--color-text);opacity:0.9;"></i>
+                </div>
+                <div style="padding:var(--space-3);">
+                  <div class="card-meta" style="margin-bottom:2px;">{{ item.courseName }}</div>
+                  <div class="card-title" style="font-size:14px;margin-bottom:var(--space-2);">{{ item.videoName }}</div>
+                  <div style="height:4px;border-radius:4px;background:var(--color-neutral-800);overflow:hidden;">
+                    <div style="height:100%;background:var(--color-accent);width:{{ item.percent }}%;"></div>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <h2 style="font-family:var(--font-heading);font-weight:500;font-size:18px;margin:0 0 var(--space-3) 0;">Meus cursos</h2>
+      <sc-if value="{{ hasCourses }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-4);">
+          <sc-for list="{{ filteredCourses }}" as="course" hint-placeholder-count="2">
+            <div class="card elev-sm" style="cursor:pointer;" onClick="{{ course.onOpen }}">
+              <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3);">
+                <div style="width:44px;height:44px;border-radius:var(--radius-md);background:linear-gradient(135deg,var(--color-accent-800),var(--color-accent-600));display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <i class="ph ph-folder-open" style="font-size:20px;color:var(--color-text);"></i>
+                </div>
+                <div style="min-width:0;">
+                  <div class="card-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ course.name }}</div>
+                  <div class="card-meta">{{ course.sourceLabel }}</div>
+                </div>
+              </div>
+              <div class="card-body" style="margin-bottom:var(--space-2);">{{ course.completedVideos }} de {{ course.totalVideos }} aulas concluídas</div>
+              <div style="height:6px;border-radius:4px;background:var(--color-neutral-800);overflow:hidden;">
+                <div style="height:100%;background:var(--color-accent);width:{{ course.percent }}%;"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasNoCourses }}">
+        <div style="color:var(--color-neutral-400);padding:var(--space-6) 0;">Nenhum curso encontrado.</div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPlayerView }}">
+    <div style="flex:1;display:flex;min-height:0;">
+      <div style="width:320px;border-right:1px solid var(--color-neutral-800);display:flex;flex-direction:column;min-height:0;">
+        <div style="padding:var(--space-4);border-bottom:1px solid var(--color-neutral-800);">
+          <button class="btn btn-ghost" style="margin-bottom:var(--space-3);" onClick="{{ openLibrary }}"><i class="ph ph-arrow-left"></i> Cursos</button>
+          <div class="card-title" style="margin-bottom:var(--space-1);">{{ activeCourse.name }}</div>
+          <div class="card-meta" style="margin-bottom:var(--space-2);">{{ activeCourse.sourceLabel }} · {{ activeCourse.completedVideos }}/{{ activeCourse.totalVideos }} aulas</div>
+          <div style="height:6px;border-radius:4px;background:var(--color-neutral-800);overflow:hidden;margin-bottom:var(--space-3);">
+            <div style="height:100%;background:var(--color-accent);width:{{ activeCourse.percent }}%;"></div>
+          </div>
+          <div style="display:flex;gap:var(--space-2);">
+            <button class="btn btn-ghost" style="{{ filterAllStyle }}" onClick="{{ setFilterAll }}">Todos</button>
+            <button class="btn btn-ghost" style="{{ filterPendingStyle }}" onClick="{{ setFilterPending }}">Pendentes</button>
+            <button class="btn btn-ghost" style="{{ filterCompletedStyle }}" onClick="{{ setFilterCompleted }}">Concluídos</button>
+          </div>
+          <sc-if value="{{ activeCourse.isFs }}">
+            <button class="btn btn-secondary btn-block" style="margin-top:var(--space-3);" onClick="{{ refreshActiveCourse }}"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+          </sc-if>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:var(--space-2);">
+          <sc-for list="{{ sidebarGroups }}" as="group" hint-placeholder-count="2">
+            <div style="margin-bottom:var(--space-2);">
+              <sc-if value="{{ group.module }}"><div style="padding:var(--space-2) var(--space-2) var(--space-1);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-neutral-400);">{{ group.module }}</div></sc-if>
+              <sc-for list="{{ group.items }}" as="item" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2);border-radius:var(--radius-md);cursor:pointer;background:{{ item.bg }};" onClick="{{ item.onSelect }}">
+                  <i class="{{ item.checkIconClass }}" style="font-size:16px;color:{{ item.checkColor }};flex-shrink:0;"></i>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ item.textColor }};">{{ item.name }}</div>
+                    <div style="font-size:11px;color:var(--color-neutral-400);">{{ item.durationLabel }}</div>
+                  </div>
+                  <i class="{{ item.favIconClass }}" style="font-size:14px;color:{{ item.favColor }};" onClick="{{ item.onToggleFav }}"></i>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex:1;display:flex;flex-direction:column;min-height:0;overflow-y:auto;">
+        <div ref="{{ setPlayerSurfaceRef }}" style="background:#000;aspect-ratio:16/9;max-height:52vh;display:flex;align-items:center;justify-content:center;">
+          <sc-if value="{{ isFsVideo }}">
+            <video src="{{ blobUrl }}" ref="{{ setVideoElRef }}" style="width:100%;height:100%;" onTimeUpdate="{{ handleVideoTimeUpdate }}" onLoadedMetadata="{{ handleLoadedMetadata }}" onPlay="{{ onVideoPlay }}" onPause="{{ onVideoPause }}" onEnded="{{ onVideoPause }}" onClick="{{ togglePlay }}"></video>
+          </sc-if>
+          <sc-if value="{{ isDemoVideo }}">
+            <div style="width:100%;height:100%;background:linear-gradient(135deg,var(--color-accent-900),var(--color-neutral-900));display:flex;align-items:center;justify-content:center;cursor:pointer;" onClick="{{ togglePlay }}">
+              <i class="{{ demoPlayIconClass }}" style="font-size:56px;color:var(--color-text);opacity:0.9;"></i>
+            </div>
+          </sc-if>
+          <sc-if value="{{ noActiveVideo }}"><div style="color:var(--color-neutral-400);">Selecione uma aula</div></sc-if>
+        </div>
+
+        <div style="padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-neutral-800);">
+          <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-2);">
+            <button class="btn-icon" onClick="{{ togglePlay }}"><i class="{{ playIconClass }}"></i></button>
+            <button class="btn-icon" onClick="{{ skipBack }}"><i class="ph ph-arrow-counter-clockwise"></i></button>
+            <button class="btn-icon" onClick="{{ skipFwd }}"><i class="ph ph-arrow-clockwise"></i></button>
+            <span style="font-size:12px;color:var(--color-neutral-300);min-width:88px;">{{ timeLabel }}</span>
+            <input type="range" min="0" max="{{ activeVideoDuration }}" value="{{ currentTime }}" onChange="{{ handleSeekInput }}" style="flex:1;accent-color:var(--color-accent);" />
+            <select class="input" style="width:auto;" value="{{ speed }}" onChange="{{ handleSpeedChange }}">
+              <sc-for list="{{ speedOptions }}" as="opt"><option value="{{ opt }}">{{ opt }}x</option></sc-for>
+            </select>
+            <button class="btn-icon" onClick="{{ toggleFullscreen }}"><i class="ph ph-corners-out"></i></button>
+            <button class="btn {{ completeBtnClass }}" onClick="{{ toggleActiveCompleted }}"><i class="ph ph-check-circle"></i> {{ completeBtnLabel }}</button>
+          </div>
+          <div class="card-title" style="font-size:15px;">{{ activeVideo.name }}</div>
+        </div>
+
+        <div style="padding:0 var(--space-4);border-bottom:1px solid var(--color-neutral-800);display:flex;gap:var(--space-1);">
+          <button class="btn btn-ghost" style="{{ tabVideoStyle }}" onClick="{{ setTabVideoNotes }}"><i class="ph ph-note-pencil"></i> Anotações do vídeo</button>
+          <button class="btn btn-ghost" style="{{ tabCourseStyle }}" onClick="{{ setTabCourseNotes }}"><i class="ph ph-notebook"></i> Notas do curso</button>
+          <button class="btn btn-ghost" style="{{ tabMaterialsStyle }}" onClick="{{ setTabMaterials }}"><i class="ph ph-paperclip"></i> Materiais ({{ materialsCount }})</button>
+        </div>
+
+        <div style="padding:var(--space-4);flex:1;">
+          <sc-if value="{{ isTabVideoNotes }}">
+            <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);">
+              <input class="input" style="flex:1;" placeholder="Escreva uma anotação no tempo atual..." value="{{ newNoteDraft }}" onChange="{{ setNoteDraft }}" onKeyDown="{{ handleNoteKeydown }}" />
+              <button class="btn btn-primary" onClick="{{ addVideoNote }}"><i class="ph ph-plus"></i> {{ timeLabelShort }}</button>
+            </div>
+            <sc-for list="{{ videoNotesList }}" as="note" hint-placeholder-count="2">
+              <div style="display:flex;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-800);align-items:flex-start;">
+                <button class="tag tag-accent" style="cursor:pointer;flex-shrink:0;border:none;" onClick="{{ note.onJump }}">{{ note.timeLabel }}</button>
+                <div style="flex:1;font-size:13px;">{{ note.text }}</div>
+                <i class="ph ph-trash" style="cursor:pointer;color:var(--color-neutral-400);" onClick="{{ note.onRemove }}"></i>
+              </div>
+            </sc-for>
+            <sc-if value="{{ hasNoVideoNotes }}"><div style="color:var(--color-neutral-400);font-size:13px;">Nenhuma anotação ainda nesta aula.</div></sc-if>
+          </sc-if>
+          <sc-if value="{{ isTabCourseNotes }}">
+            <textarea class="input" style="width:100%;min-height:220px;resize:vertical;font-family:var(--font-body);" placeholder="Notas gerais sobre o curso..." value="{{ courseNoteDraft }}" onChange="{{ handleCourseNoteChange }}"></textarea>
+          </sc-if>
+          <sc-if value="{{ isTabMaterials }}">
+            <sc-for list="{{ materialsList }}" as="mat" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--color-neutral-800);cursor:pointer;" onClick="{{ mat.onOpen }}">
+                <i class="ph ph-file" style="font-size:18px;color:var(--color-accent-300);"></i>
+                <div style="flex:1;font-size:13px;">{{ mat.name }}</div>
+                <i class="ph ph-download-simple" style="color:var(--color-neutral-400);"></i>
+              </div>
+            </sc-for>
+            <sc-if value="{{ hasNoMaterials }}"><div style="color:var(--color-neutral-400);font-size:13px;">Nenhum material anexado nesta pasta.</div></sc-if>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}">
+    <div style="position:fixed;bottom:var(--space-4);right:var(--space-4);background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);box-shadow:var(--shadow-md);font-size:13px;z-index:50;max-width:320px;">{{ toast }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;completionThreshold&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.95,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0.8,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;section&quot;:&quot;Comportamento&quot;},&quot;defaultSpeed&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;options&quot;:[0.75,1,1.25,1.5,1.75,2],&quot;section&quot;:&quot;Comportamento&quot;},&quot;showContinueWatching&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Biblioteca&quot;}}">
+const VIDEO_EXT = new Set(['.mp4','.mkv','.avi','.webm','.mov','.wmv','.m4v','.flv','.mpeg','.mpg','.3gp','.ogv']);
+const MATERIAL_EXT = new Set(['.pdf','.csv','.txt','.zip','.docx','.pptx','.xlsx','.md','.png','.jpg','.jpeg']);
+
+function formatTime(seconds) {
+  if (seconds == null || Number.isNaN(seconds) || seconds < 0) return '--:--';
+  const total = Math.floor(seconds);
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+function loadJSON(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } }
+function saveJSON(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function naturalCompare(a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
+
+function buildDemoLibrary() {
+  const dsLessons = [
+    ['01-boas-vindas.mp4', 'Boas-vindas ao curso', 'Introdução', 180],
+    ['02-panorama-mercado.mp4', 'Panorama do mercado de dados', 'Introdução', 540],
+    ['03-python-fundamentos.mp4', 'Python: fundamentos essenciais', 'Python para Dados', 920],
+    ['04-numpy.mp4', 'Numpy na prática', 'Python para Dados', 760],
+    ['05-pandas.mp4', 'Pandas: manipulando dados', 'Python para Dados', 1040],
+    ['06-distribuicoes.mp4', 'Distribuições estatísticas', 'Estatística Aplicada', 680],
+    ['07-testes-hipotese.mp4', 'Testes de hipótese', 'Estatística Aplicada', 900],
+    ['08-regressao.mp4', 'Regressão linear e logística', 'Machine Learning', 1150],
+    ['09-classificacao.mp4', 'Modelos de classificação', 'Machine Learning', 1320],
+    ['10-arvores.mp4', 'Árvores de decisão e ensembles', 'Machine Learning', 1400],
+    ['11-estudo-caso.mp4', 'Estudo de caso completo', 'Projeto Final', 1680],
+    ['12-apresentacao.mp4', 'Como apresentar seus resultados', 'Projeto Final', 420],
+  ];
+  const sqlLessons = [
+    ['01-introducao-sql.mp4', 'Introdução ao SQL', 'Fundamentos', 420],
+    ['02-select-where.mp4', 'SELECT, WHERE e filtros', 'Fundamentos', 560],
+    ['03-joins.mp4', 'JOINs na prática', 'Consultas Avançadas', 780],
+    ['04-agregacoes.mp4', 'Funções de agregação e GROUP BY', 'Consultas Avançadas', 690],
+    ['05-subqueries.mp4', 'Subqueries e CTEs', 'Consultas Avançadas', 850],
+    ['06-indices-performance.mp4', 'Índices e performance', 'Otimização', 760],
+  ];
+  const build = (id, name, lessons, materials) => ({
+    id, name, source: 'demo', dirHandle: null,
+    videos: lessons.map(([file, title, mod, dur], i) => ({ id: id + '/' + file, name: title, fileName: file, relativePath: file, module: mod, sortOrder: i, durationSeconds: dur, source: 'demo' })),
+    materials: materials || [],
+  });
+  return [
+    build('data-science-do-zero', 'Data Science do Zero', dsLessons, [
+      { name: 'slides-modulo-1.pdf', relativePath: 'slides-modulo-1.pdf' },
+      { name: 'dataset-vendas.csv', relativePath: 'dataset-vendas.csv' },
+    ]),
+    build('fundamentos-de-sql', 'Fundamentos de SQL', sqlLessons, [
+      { name: 'exercicios-sql.pdf', relativePath: 'exercicios-sql.pdf' },
+    ]),
+  ];
+}
+
+class Component extends DCLogic {
+  state = {
+    view: 'library', query: '', library: [],
+    activeCourseId: null, activeVideoId: null, activeTab: 'videoNotes', sidebarFilter: 'all',
+    isPlaying: false, currentTime: 0, duration: 0, speed: 1,
+    toast: null, blobUrl: null, newNoteDraft: '', courseNoteDraft: '',
+    progress: {}, favorites: {}, videoNotes: {}, courseNotes: {},
+  };
+  _tickInterval = null;
+  _lastSaveAt = {};
+
+  componentDidMount() {
+    const progress = loadJSON('cv_progress', {});
+    const favorites = loadJSON('cv_favorites', {});
+    const videoNotes = loadJSON('cv_videoNotes', {});
+    const courseNotes = loadJSON('cv_courseNotes', {});
+    const seeded = loadJSON('cv_seeded', false);
+    const library = buildDemoLibrary();
+    if (!seeded) {
+      const ds = library[0], sql = library[1];
+      progress[ds.videos[0].id] = { position: ds.videos[0].durationSeconds, percent: 100, completed: true, lastWatchedAt: Date.now() - 1000 * 60 * 60 * 30 };
+      progress[ds.videos[1].id] = { position: ds.videos[1].durationSeconds, percent: 100, completed: true, lastWatchedAt: Date.now() - 1000 * 60 * 60 * 20 };
+      progress[ds.videos[2].id] = { position: ds.videos[2].durationSeconds * 0.42, percent: 42, completed: false, lastWatchedAt: Date.now() - 1000 * 60 * 60 * 2 };
+      progress[sql.videos[0].id] = { position: sql.videos[0].durationSeconds, percent: 100, completed: true, lastWatchedAt: Date.now() - 1000 * 60 * 60 * 50 };
+      favorites[ds.videos[3].id] = true;
+      videoNotes[ds.videos[2].id] = [{ id: 'n1', time: 95, text: 'Rever diferença entre array e DataFrame.', createdAt: Date.now() }];
+      courseNotes[ds.id] = 'Focar em revisar Numpy antes do módulo de Machine Learning.';
+      saveJSON('cv_progress', progress); saveJSON('cv_favorites', favorites);
+      saveJSON('cv_videoNotes', videoNotes); saveJSON('cv_courseNotes', courseNotes);
+      saveJSON('cv_seeded', true);
+    }
+    this.setState({ library, progress, favorites, videoNotes, courseNotes, speed: this.props.defaultSpeed ?? 1 });
+    document.addEventListener('keydown', this.handleKeydown);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('keydown', this.handleKeydown);
+    if (this._tickInterval) clearInterval(this._tickInterval);
+    if (this.state.blobUrl) URL.revokeObjectURL(this.state.blobUrl);
+  }
+
+  showToast = (msg) => {
+    this.setState({ toast: msg });
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 3200);
+  };
+
+  setQuery = (e) => this.setState({ query: e.target.value });
+  openLibrary = () => { this.pausePlayback(); this.setState({ view: 'library', activeCourseId: null, activeVideoId: null }); };
+
+  openCourse = (courseId) => {
+    const course = this.state.library.find(c => c.id === courseId);
+    if (!course) return;
+    const firstUnfinished = course.videos.find(v => !(this.state.progress[v.id] && this.state.progress[v.id].completed)) || course.videos[0];
+    this.setState({ view: 'player', activeCourseId: courseId, sidebarFilter: 'all', courseNoteDraft: this.state.courseNotes[courseId] || '' });
+    if (firstUnfinished) this.selectVideo(firstUnfinished.id, courseId);
+  };
+  resumeVideo = (courseId, videoId) => {
+    this.setState({ view: 'player', activeCourseId: courseId, courseNoteDraft: this.state.courseNotes[courseId] || '' });
+    this.selectVideo(videoId, courseId);
+  };
+
+  selectVideo = async (videoId, courseIdOverride) => {
+    this.pausePlayback();
+    const courseId = courseIdOverride || this.state.activeCourseId;
+    const course = this.state.library.find(c => c.id === courseId);
+    const video = course && course.videos.find(v => v.id === videoId);
+    if (!video) return;
+    const existing = this.state.progress[videoId];
+    let blobUrl = null;
+    if (video.source === 'fs' && video.fileHandle) {
+      try { const file = await video.fileHandle.getFile(); blobUrl = URL.createObjectURL(file); }
+      catch (e) { this.showToast('Não foi possível abrir o arquivo de vídeo.'); }
+    }
+    if (this.state.blobUrl) URL.revokeObjectURL(this.state.blobUrl);
+    this.setState({ activeVideoId: videoId, currentTime: existing ? existing.position : 0, duration: video.durationSeconds || 0, blobUrl, isPlaying: false, newNoteDraft: '' });
+  };
+
+  togglePlay = () => {
+    const video = this.getActiveVideo();
+    if (!video) return;
+    if (video.source === 'fs') {
+      if (this.state.isPlaying) { this._videoEl && this._videoEl.pause(); } else { this._videoEl && this._videoEl.play().catch(() => {}); }
+    } else {
+      if (this.state.isPlaying) this.pausePlayback(); else this.startPlayback();
+    }
+  };
+  startPlayback = () => { this.setState({ isPlaying: true }); if (this._tickInterval) clearInterval(this._tickInterval); this._tickInterval = setInterval(this.demoTick, 250); };
+  pausePlayback = () => {
+    if (this._tickInterval) { clearInterval(this._tickInterval); this._tickInterval = null; }
+    if (this.state.isPlaying) this.setState({ isPlaying: false });
+    this.commitProgress(true);
+  };
+  onVideoPlay = () => this.setState({ isPlaying: true });
+  onVideoPause = () => { this.setState({ isPlaying: false }); this.commitProgress(true); };
+
+  demoTick = () => {
+    this.setState(s => {
+      const video = this.getActiveVideo(s);
+      if (!video) return null;
+      const dur = video.durationSeconds || 0;
+      let t = s.currentTime + 0.25 * s.speed;
+      let playing = s.isPlaying;
+      if (dur && t >= dur) { t = dur; playing = false; if (this._tickInterval) { clearInterval(this._tickInterval); this._tickInterval = null; } }
+      return { currentTime: t, isPlaying: playing };
+    }, () => this.commitProgress(false));
+  };
+
+  handleVideoTimeUpdate = (e) => {
+    const t = e.target.currentTime;
+    this.setState({ currentTime: t, duration: e.target.duration || this.state.duration }, () => this.commitProgress(false));
+  };
+  handleLoadedMetadata = (e) => {
+    const dur = e.target.duration;
+    const video = this.getActiveVideo();
+    if (video && video.durationSeconds !== dur) {
+      const library = this.state.library.map(c => c.id !== this.state.activeCourseId ? c : { ...c, videos: c.videos.map(v => v.id === video.id ? { ...v, durationSeconds: dur } : v) });
+      this.setState({ library, duration: dur });
+    }
+  };
+
+  commitProgress = (force) => {
+    const video = this.getActiveVideo();
+    if (!video) return;
+    const dur = video.durationSeconds || this.state.duration || 0;
+    const now = Date.now();
+    const last = this._lastSaveAt[video.id] || 0;
+    if (!force && now - last < 2000) return;
+    this._lastSaveAt[video.id] = now;
+    const threshold = this.props.completionThreshold ?? 0.95;
+    const percent = dur ? Math.min(100, (this.state.currentTime / dur) * 100) : 0;
+    const completed = dur ? (this.state.currentTime / dur) >= threshold : false;
+    const progress = { ...this.state.progress, [video.id]: { position: this.state.currentTime, percent, completed, lastWatchedAt: now } };
+    this.setState({ progress });
+    saveJSON('cv_progress', progress);
+  };
+
+  seekTo = (seconds) => {
+    const video = this.getActiveVideo();
+    if (!video) return;
+    const dur = video.durationSeconds || this.state.duration || 0;
+    const t = Math.max(0, Math.min(dur, seconds));
+    if (video.source === 'fs' && this._videoEl) this._videoEl.currentTime = t;
+    this.setState({ currentTime: t }, () => this.commitProgress(true));
+  };
+  handleSeekInput = (e) => this.seekTo(parseFloat(e.target.value));
+  skipBack = () => this.seekTo(this.state.currentTime - 10);
+  skipFwd = () => this.seekTo(this.state.currentTime + 10);
+  setSpeed = (speed) => { this.setState({ speed }); if (this._videoEl) this._videoEl.playbackRate = speed; };
+  handleSpeedChange = (e) => this.setSpeed(parseFloat(e.target.value));
+
+  toggleFavorite = (videoId) => {
+    const favorites = { ...this.state.favorites };
+    if (favorites[videoId]) delete favorites[videoId]; else favorites[videoId] = true;
+    this.setState({ favorites }); saveJSON('cv_favorites', favorites);
+  };
+  toggleCompleted = (videoId) => {
+    const video = this.findVideoById(videoId);
+    if (!video) return;
+    const dur = video.durationSeconds || 0;
+    const existing = this.state.progress[videoId];
+    const nowCompleted = !(existing && existing.completed);
+    const entry = nowCompleted ? { position: dur, percent: 100, completed: true, lastWatchedAt: Date.now() } : { position: 0, percent: 0, completed: false, lastWatchedAt: Date.now() };
+    const progress = { ...this.state.progress, [videoId]: entry };
+    this.setState({ progress });
+    saveJSON('cv_progress', progress);
+    if (videoId === this.state.activeVideoId) this.setState({ currentTime: entry.position });
+  };
+  toggleActiveCompleted = () => this.toggleCompleted(this.state.activeVideoId);
+
+  setSidebarFilter = (f) => this.setState({ sidebarFilter: f });
+  setFilterAll = () => this.setSidebarFilter('all');
+  setFilterPending = () => this.setSidebarFilter('pending');
+  setFilterCompleted = () => this.setSidebarFilter('completed');
+  setTab = (t) => this.setState({ activeTab: t });
+  setTabVideoNotes = () => this.setTab('videoNotes');
+  setTabCourseNotes = () => this.setTab('courseNotes');
+  setTabMaterials = () => this.setTab('materials');
+
+  setNoteDraft = (e) => this.setState({ newNoteDraft: e.target.value });
+  handleNoteKeydown = (e) => { if (e.key === 'Enter') this.addVideoNote(); };
+  addVideoNote = () => {
+    const text = this.state.newNoteDraft.trim();
+    if (!text || !this.state.activeVideoId) return;
+    const videoId = this.state.activeVideoId;
+    const list = this.state.videoNotes[videoId] || [];
+    const note = { id: 'n' + Date.now(), time: this.state.currentTime, text, createdAt: Date.now() };
+    const updated = [...list, note].sort((a, b) => a.time - b.time);
+    const videoNotes = { ...this.state.videoNotes, [videoId]: updated };
+    this.setState({ videoNotes, newNoteDraft: '' });
+    saveJSON('cv_videoNotes', videoNotes);
+  };
+  removeVideoNote = (noteId) => {
+    const videoId = this.state.activeVideoId;
+    const updated = (this.state.videoNotes[videoId] || []).filter(n => n.id !== noteId);
+    const videoNotes = { ...this.state.videoNotes, [videoId]: updated };
+    this.setState({ videoNotes }); saveJSON('cv_videoNotes', videoNotes);
+  };
+  handleCourseNoteChange = (e) => {
+    const val = e.target.value;
+    this.setState({ courseNoteDraft: val });
+    clearTimeout(this._courseNoteTimer);
+    this._courseNoteTimer = setTimeout(() => {
+      const courseId = this.state.activeCourseId;
+      const courseNotes = { ...this.state.courseNotes, [courseId]: val };
+      this.setState({ courseNotes }); saveJSON('cv_courseNotes', courseNotes);
+    }, 500);
+  };
+
+  findVideoById = (videoId) => { for (const c of this.state.library) { const v = c.videos.find(v => v.id === videoId); if (v) return v; } return null; };
+  getActiveVideo = (s) => { s = s || this.state; const course = s.library.find(c => c.id === s.activeCourseId); return course ? course.videos.find(v => v.id === s.activeVideoId) : null; };
+
+  handleKeydown = (e) => {
+    if (this.state.view !== 'player') return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    if (e.code === 'Space') { e.preventDefault(); this.togglePlay(); }
+    else if (e.code === 'ArrowLeft') { this.skipBack(); }
+    else if (e.code === 'ArrowRight') { this.skipFwd(); }
+    else if (e.key.toLowerCase() === 'f') { this.toggleFullscreen(); }
+  };
+  toggleFullscreen = () => {
+    const el = this._playerSurfaceEl;
+    if (!el) return;
+    if (!document.fullscreenElement) el.requestFullscreen && el.requestFullscreen().catch(() => {});
+    else document.exitFullscreen && document.exitFullscreen();
+  };
+  setVideoElRef = (el) => { this._videoEl = el; if (el) el.playbackRate = this.state.speed; };
+  setPlayerSurfaceRef = (el) => { this._playerSurfaceEl = el; };
+
+  walkFolder = async (dirHandle, prefix) => {
+    let videos = [], materials = [];
+    for await (const [name, handle] of dirHandle.entries()) {
+      if (handle.kind === 'directory') {
+        const sub = await this.walkFolder(handle, prefix + name + '/');
+        videos = videos.concat(sub.videos); materials = materials.concat(sub.materials);
+      } else {
+        const dot = name.lastIndexOf('.');
+        const ext = dot >= 0 ? name.slice(dot).toLowerCase() : '';
+        const relativePath = prefix + name;
+        if (VIDEO_EXT.has(ext)) videos.push({ id: relativePath, name: name.replace(/\.[^.]+$/, ''), fileName: name, relativePath, module: prefix ? prefix.slice(0, -1) : null, durationSeconds: null, fileHandle: handle, source: 'fs' });
+        else if (MATERIAL_EXT.has(ext)) materials.push({ name, relativePath, fileHandle: handle });
+      }
+    }
+    return { videos, materials };
+  };
+  pickCourseFolder = async () => {
+    if (!window.showDirectoryPicker) { this.showToast('Este navegador/ambiente não permite selecionar pastas locais. Use os cursos de demonstração.'); return; }
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      this.showToast('Lendo pasta...');
+      const { videos, materials } = await this.walkFolder(dirHandle, '');
+      videos.sort((a, b) => naturalCompare(a.relativePath, b.relativePath));
+      videos.forEach((v, i) => v.sortOrder = i);
+      const course = { id: 'fs-' + dirHandle.name + '-' + Date.now(), name: dirHandle.name, source: 'fs', dirHandle, videos, materials };
+      this.setState(s => ({ library: [...s.library, course] }));
+      this.showToast(`Curso "${dirHandle.name}" adicionado com ${videos.length} vídeo(s).`);
+    } catch (e) { if (e && e.name !== 'AbortError') this.showToast('Não foi possível ler a pasta selecionada.'); }
+  };
+  refreshActiveCourse = async () => {
+    const course = this.state.library.find(c => c.id === this.state.activeCourseId);
+    if (!course || course.source !== 'fs') { this.showToast('Atualização disponível apenas para pastas reais.'); return; }
+    this.showToast('Atualizando...');
+    const { videos, materials } = await this.walkFolder(course.dirHandle, '');
+    videos.sort((a, b) => naturalCompare(a.relativePath, b.relativePath));
+    const existingByPath = {}; course.videos.forEach(v => existingByPath[v.relativePath] = v);
+    videos.forEach((v, i) => { v.sortOrder = i; const old = existingByPath[v.relativePath]; if (old) { v.id = old.id; v.durationSeconds = old.durationSeconds; } });
+    const library = this.state.library.map(c => c.id === course.id ? { ...c, videos, materials } : c);
+    this.setState({ library });
+    this.showToast('Curso atualizado.');
+  };
+  openMaterial = async (material) => {
+    if (!material.fileHandle) { this.showToast('Materiais reais aparecem ao abrir uma pasta local.'); return; }
+    const file = await material.fileHandle.getFile();
+    const url = URL.createObjectURL(file);
+    window.open(url, '_blank');
+  };
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim().toLowerCase();
+    const courseProgress = (course) => {
+      const total = course.videos.length;
+      const completed = course.videos.filter(v => s.progress[v.id] && s.progress[v.id].completed).length;
+      return { total, completed, percent: total ? Math.round((completed / total) * 100) : 0 };
+    };
+    const filteredCourses = s.library.filter(c => !q || c.name.toLowerCase().includes(q) || c.videos.some(v => v.name.toLowerCase().includes(q)))
+      .map(c => { const p = courseProgress(c); return { id: c.id, name: c.name, sourceLabel: c.source === 'fs' ? 'Pasta local' : 'Demonstração', totalVideos: p.total, completedVideos: p.completed, percent: p.percent, onOpen: () => this.openCourse(c.id) }; });
+
+    const continueRaw = [];
+    s.library.forEach(c => c.videos.forEach(v => {
+      const p = s.progress[v.id];
+      if (p && !p.completed && p.position > 0) continueRaw.push({ courseId: c.id, courseName: c.name, videoId: v.id, videoName: v.name, percent: Math.round(p.percent || 0), lastWatchedAt: p.lastWatchedAt || 0 });
+    }));
+    continueRaw.sort((a, b) => b.lastWatchedAt - a.lastWatchedAt);
+    const continueList = continueRaw.slice(0, 4).map(item => ({ ...item, onResume: () => this.resumeVideo(item.courseId, item.videoId) }));
+
+    const activeCourseRaw = s.library.find(c => c.id === s.activeCourseId) || null;
+    const activeVideo = this.getActiveVideo();
+    let activeCourse = { name: '', sourceLabel: '', completedVideos: 0, totalVideos: 0, percent: 0, isFs: false };
+    let sidebarGroups = [];
+    let materialsList = [], hasNoMaterials = true;
+    if (activeCourseRaw) {
+      const p = courseProgress(activeCourseRaw);
+      activeCourse = { name: activeCourseRaw.name, sourceLabel: activeCourseRaw.source === 'fs' ? 'Pasta local' : 'Demonstração', completedVideos: p.completed, totalVideos: p.total, percent: p.percent, isFs: activeCourseRaw.source === 'fs' };
+      const groupsMap = new Map();
+      activeCourseRaw.videos.slice().sort((a, b) => a.sortOrder - b.sortOrder).forEach(v => {
+        const prog = s.progress[v.id];
+        const completed = !!(prog && prog.completed);
+        if (s.sidebarFilter === 'pending' && completed) return;
+        if (s.sidebarFilter === 'completed' && !completed) return;
+        const key = v.module || '';
+        if (!groupsMap.has(key)) groupsMap.set(key, []);
+        const isActive = v.id === s.activeVideoId;
+        const isFav = !!s.favorites[v.id];
+        const pct = prog ? Math.round(prog.percent || 0) : 0;
+        groupsMap.get(key).push({
+          id: v.id, name: v.name,
+          durationLabel: formatTime(v.durationSeconds) + (pct > 0 && pct < 100 ? ` · ${pct}%` : ''),
+          bg: isActive ? 'var(--color-accent-900)' : 'transparent',
+          textColor: isActive ? 'var(--color-text)' : 'var(--color-neutral-200)',
+          checkIconClass: completed ? 'ph-fill ph-check-circle' : (isActive ? 'ph ph-play-circle' : 'ph ph-circle'),
+          checkColor: completed ? 'var(--color-accent)' : 'var(--color-neutral-500)',
+          favIconClass: isFav ? 'ph-fill ph-star' : 'ph ph-star',
+          favColor: isFav ? 'var(--color-accent-300)' : 'var(--color-neutral-600)',
+          onSelect: () => this.selectVideo(v.id),
+          onToggleFav: (e) => { e.stopPropagation(); this.toggleFavorite(v.id); },
+        });
+      });
+      sidebarGroups = Array.from(groupsMap.entries()).map(([module, items]) => ({ module, items }));
+      materialsList = activeCourseRaw.materials.map(m => ({ ...m, onOpen: () => this.openMaterial(m) }));
+      hasNoMaterials = materialsList.length === 0;
+    }
+
+    const activeStyle = 'border-color:var(--color-accent);color:var(--color-accent);';
+    const videoNotesRaw = (s.videoNotes[s.activeVideoId] || []);
+    const videoNotesList = videoNotesRaw.map(n => ({ ...n, timeLabel: formatTime(n.time), onJump: () => this.seekTo(n.time), onRemove: () => this.removeVideoNote(n.id) }));
+    const activeProgress = s.activeVideoId ? s.progress[s.activeVideoId] : null;
+    const isCompleted = !!(activeProgress && activeProgress.completed);
+
+    return {
+      query: s.query, setQuery: this.setQuery, openLibrary: this.openLibrary, pickCourseFolder: this.pickCourseFolder,
+      showDemoTag: typeof window !== 'undefined' && !window.showDirectoryPicker,
+      isLibraryView: s.view === 'library', isPlayerView: s.view === 'player',
+      showContinueSection: continueList.length > 0 && (this.props.showContinueWatching ?? true), continueList,
+      hasCourses: filteredCourses.length > 0, hasNoCourses: filteredCourses.length === 0, filteredCourses,
+      activeCourse, sidebarGroups,
+      filterAllStyle: s.sidebarFilter === 'all' ? activeStyle : '', filterPendingStyle: s.sidebarFilter === 'pending' ? activeStyle : '', filterCompletedStyle: s.sidebarFilter === 'completed' ? activeStyle : '',
+      setFilterAll: this.setFilterAll, setFilterPending: this.setFilterPending, setFilterCompleted: this.setFilterCompleted, refreshActiveCourse: this.refreshActiveCourse,
+      setPlayerSurfaceRef: this.setPlayerSurfaceRef, setVideoElRef: this.setVideoElRef,
+      isFsVideo: !!(activeVideo && activeVideo.source === 'fs' && s.blobUrl), isDemoVideo: !!(activeVideo && activeVideo.source === 'demo'), noActiveVideo: !activeVideo,
+      blobUrl: s.blobUrl, handleVideoTimeUpdate: this.handleVideoTimeUpdate, handleLoadedMetadata: this.handleLoadedMetadata, onVideoPlay: this.onVideoPlay, onVideoPause: this.onVideoPause, togglePlay: this.togglePlay,
+      demoPlayIconClass: s.isPlaying ? 'ph-fill ph-pause-circle' : 'ph-fill ph-play-circle',
+      playIconClass: s.isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play',
+      skipBack: this.skipBack, skipFwd: this.skipFwd, toggleFullscreen: this.toggleFullscreen,
+      timeLabel: `${formatTime(s.currentTime)} / ${formatTime(s.duration)}`, timeLabelShort: `em ${formatTime(s.currentTime)}`,
+      currentTime: s.currentTime, activeVideoDuration: s.duration || 0, handleSeekInput: this.handleSeekInput,
+      speed: s.speed, speedOptions: [0.75, 1, 1.25, 1.5, 1.75, 2], handleSpeedChange: this.handleSpeedChange,
+      completeBtnClass: isCompleted ? 'btn-secondary' : 'btn-ghost', completeBtnLabel: isCompleted ? 'Concluída' : 'Marcar como concluída', toggleActiveCompleted: this.toggleActiveCompleted,
+      activeVideo: activeVideo || { name: '' },
+      tabVideoStyle: s.activeTab === 'videoNotes' ? activeStyle : '', tabCourseStyle: s.activeTab === 'courseNotes' ? activeStyle : '', tabMaterialsStyle: s.activeTab === 'materials' ? activeStyle : '',
+      setTabVideoNotes: this.setTabVideoNotes, setTabCourseNotes: this.setTabCourseNotes, setTabMaterials: this.setTabMaterials,
+      isTabVideoNotes: s.activeTab === 'videoNotes', isTabCourseNotes: s.activeTab === 'courseNotes', isTabMaterials: s.activeTab === 'materials',
+      newNoteDraft: s.newNoteDraft, setNoteDraft: this.setNoteDraft, handleNoteKeydown: this.handleNoteKeydown, addVideoNote: this.addVideoNote,
+      videoNotesList, hasNoVideoNotes: videoNotesList.length === 0,
+      courseNoteDraft: s.courseNoteDraft, handleCourseNoteChange: this.handleCourseNoteChange,
+      materialsList, hasNoMaterials, materialsCount: materialsList.length,
+      toast: s.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>
