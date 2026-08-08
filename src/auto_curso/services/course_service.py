@@ -116,6 +116,13 @@ class CourseService:
         if video is None:
             raise ValueError("Vídeo não encontrado.")
 
+        existing = self._progress.get(video_id)
+        if existing and existing.is_completed:
+            # Rewatching a finished video always starts at position 0, so a normal
+            # autosave would otherwise recompute a tiny position/duration ratio and
+            # un-complete it. Only the explicit toggle (set_video_completed) may do that.
+            return existing
+
         if duration_seconds and duration_seconds > 0 and video.duration_seconds is None:
             self._courses.update_video_duration(video_id, duration_seconds)
 

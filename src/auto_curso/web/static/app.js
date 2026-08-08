@@ -309,12 +309,15 @@ function loadVideoIntoPlayer(v) {
       videoEl.currentTime = v.position_seconds;
     }
     el("seek-range").max = videoEl.duration || 0;
-    videoEl.play().catch(() => {});
   };
   videoEl.ontimeupdate = () => {
     el("seek-range").value = videoEl.currentTime;
     el("time-label").textContent = `${formatSeconds(videoEl.currentTime)} / ${formatSeconds(videoEl.duration)}`;
     el("note-time-label").textContent = `em ${formatSeconds(videoEl.currentTime)}`;
+  };
+  videoEl.onclick = () => {
+    if (videoEl.paused) videoEl.play().catch(() => {});
+    else videoEl.pause();
   };
   videoEl.onplay = () => el("play-icon").className = "ph-fill ph-pause";
   videoEl.onpause = () => { el("play-icon").className = "ph-fill ph-play"; saveProgress(videoEl); };
@@ -329,16 +332,17 @@ function loadVideoIntoPlayer(v) {
 }
 
 async function saveProgress(videoEl) {
-  if (!state.currentVideoId || !videoEl.duration) return;
+  const videoId = state.currentVideoId;
+  if (!videoId || !videoEl.duration) return;
   try {
-    const result = await api(`/api/videos/${state.currentVideoId}/progress`, {
+    const result = await api(`/api/videos/${videoId}/progress`, {
       method: "POST",
       body: JSON.stringify({
         position_seconds: videoEl.currentTime,
         duration_seconds: videoEl.duration,
       }),
     });
-    const v = state.videos.find((v) => v.id === state.currentVideoId);
+    const v = state.videos.find((v) => v.id === videoId);
     if (v) {
       v.position_seconds = result.position_seconds;
       v.watched_percent = result.watched_percent;
@@ -474,8 +478,9 @@ async function loadCourseNote() {
 el("course-note-textarea").addEventListener("input", (e) => {
   clearTimeout(state.courseNoteTimer);
   const text = e.target.value;
+  const courseId = state.currentCourseId;
   state.courseNoteTimer = setTimeout(() => {
-    api(`/api/courses/${state.currentCourseId}/notes`, {
+    api(`/api/courses/${courseId}/notes`, {
       method: "PUT",
       body: JSON.stringify({ text }),
     }).catch(() => {});
