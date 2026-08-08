@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from auto_curso.constants import COMPLETION_THRESHOLD
+from auto_curso.constants import (
+    COMPLETION_THRESHOLD,
+    MAX_UPLOAD_SIZE_BYTES,
+    UPLOAD_EXTENSIONS,
+    get_course_materials_dir,
+    get_video_materials_dir,
+)
 from auto_curso.models.course import Course, CourseSummary
+from auto_curso.models.material import UploadedMaterial
 from auto_curso.models.note import VideoNote
 from auto_curso.models.progress import PlaybackProgress
 from auto_curso.models.video import ScannedVideoFile, Video, VideoWithProgress
 from auto_curso.repositories.course_repository import CourseRepository
+from auto_curso.repositories.materials_repository import MaterialsRepository
 from auto_curso.repositories.notes_repository import NotesRepository
 from auto_curso.repositories.progress_repository import ProgressRepository
 from auto_curso.services.folder_scanner import FolderScanner
@@ -23,11 +32,13 @@ class CourseService:
         progress_repo: ProgressRepository | None = None,
         scanner: FolderScanner | None = None,
         notes_repo: NotesRepository | None = None,
+        uploads_repo: MaterialsRepository | None = None,
     ) -> None:
         self._courses = course_repo or CourseRepository()
         self._progress = progress_repo or ProgressRepository()
         self._scanner = scanner or FolderScanner()
         self._notes = notes_repo or NotesRepository()
+        self._uploads = uploads_repo or MaterialsRepository()
 
     def add_course(self, folder_path: str) -> CourseSummary:
         normalized = str(Path(folder_path).resolve())
@@ -58,6 +69,7 @@ class CourseService:
 
     def remove_course(self, course_id: UUID) -> None:
         self._courses.delete(course_id)
+        shutil.rmtree(get_course_materials_dir(course_id), ignore_errors=True)
 
     def get_course_summaries(self) -> list[CourseSummary]:
         return [self._build_summary(c) for c in self._courses.get_all()]
@@ -201,6 +213,51 @@ class CourseService:
         if course is None:
             raise ValueError("Curso não encontrado.")
         return self._scanner.scan_materials(course.folder_path)
+
+    def list_video_materials(self, video_id: UUID) -> list[UploadedMaterial]:
+        return self._uploads.list_for_video(video_id)
+
+    def add_video_material(
+        self, video_id: UUID, file_name: str, data: bytes, mime_type: str
+    ) -> UploadedMaterial:
+        video = self._courses.get_video(video_id)
+        if video is None:
+            raise ValueError("Vídeo não encontrado.")
+
+        extension = Path(file_name).suffix.lower()
+        if extension not in UPLOAD_EXTENSIONS:
+            raise ValueError(
+                f"Tipo de arquivo não suportado ({extension or 'sem extensão'}). "
+                "Envie imagem, áudio ou PDF."
+            )
+        if len(data) > MAX_UPLOAD_SIZE_BYTES:
+            raise ValueError("Arquivo muito grande (máximo 50 MB).")
+
+        stored_name = f"{uuid4()}{extension}"
+        target_dir = get_video_materials_dir(video.course_id, video_id)
+        (target_dir / stored_name).write_bytes(data)
+
+        return self._uploads.add(video_id, file_name, stored_name, mime_type, len(data))
+
+    def delete_video_material(self, material_id: UUID) -> None:
+        material = self._uploads.get(material_id)
+        if material is None:
+            return
+        self._uploads.delete(material_id)
+        video = self._courses.get_video(material.video_id)
+        if video is not None:
+            path = get_video_materials_dir(video.course_id, material.video_id) / material.stored_name
+            path.unlink(missing_ok=True)
+
+    def get_video_material_path(self, material_id: UUID) -> tuple[UploadedMaterial, Path] | None:
+        material = self._uploads.get(material_id)
+        if material is None:
+            return None
+        video = self._courses.get_video(material.video_id)
+        if video is None:
+            return None
+        path = get_video_materials_dir(video.course_id, material.video_id) / material.stored_name
+        return material, path
 
     def _sync_videos(self, course: Course) -> None:
         scanned = self._scanner.scan(course.folder_path)

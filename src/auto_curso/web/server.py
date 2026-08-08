@@ -7,14 +7,16 @@ import webbrowser
 from pathlib import Path, PurePosixPath
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from auto_curso.constants import MAX_UPLOAD_SIZE_BYTES
 from auto_curso.db.schema import initialize_database
 from auto_curso.helpers import format_seconds
 from auto_curso.repositories.course_repository import CourseRepository
+from auto_curso.repositories.materials_repository import MaterialsRepository
 from auto_curso.repositories.notes_repository import NotesRepository
 from auto_curso.repositories.progress_repository import ProgressRepository
 from auto_curso.services.course_service import CourseService
@@ -29,7 +31,10 @@ app = FastAPI(title="Video Learning Tracker")
 course_repo = CourseRepository()
 progress_repo = ProgressRepository()
 notes_repo = NotesRepository()
-course_service = CourseService(course_repo, progress_repo, notes_repo=notes_repo)
+uploads_repo = MaterialsRepository()
+course_service = CourseService(
+    course_repo, progress_repo, notes_repo=notes_repo, uploads_repo=uploads_repo
+)
 
 
 class AddCourseBody(BaseModel):
@@ -284,6 +289,51 @@ def download_material(course_id: UUID, path: str):
         raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
 
     return FileResponse(full_path, filename=full_path.name)
+
+
+def _uploaded_material_json(m) -> dict:
+    return {
+        "id": str(m.id),
+        "file_name": m.file_name,
+        "mime_type": m.mime_type,
+        "size_bytes": m.size_bytes,
+        "uploaded_at": m.uploaded_at.isoformat(),
+    }
+
+
+@app.get("/api/videos/{video_id}/materials")
+def list_video_materials(video_id: UUID) -> list[dict]:
+    materials = course_service.list_video_materials(video_id)
+    return [_uploaded_material_json(m) for m in materials]
+
+
+@app.post("/api/videos/{video_id}/materials")
+async def upload_video_material(video_id: UUID, file: UploadFile = File(...)) -> dict:
+    data = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+    if len(data) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Arquivo muito grande (máximo 50 MB).")
+    try:
+        material = course_service.add_video_material(
+            video_id, file.filename or "arquivo", data, file.content_type or "application/octet-stream"
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _uploaded_material_json(material)
+
+
+@app.delete("/api/materials/{material_id}")
+def delete_video_material(material_id: UUID) -> dict:
+    course_service.delete_video_material(material_id)
+    return {"ok": True}
+
+
+@app.get("/api/materials/{material_id}/download")
+def download_video_material(material_id: UUID):
+    result = course_service.get_video_material_path(material_id)
+    if result is None or not result[1].is_file():
+        raise HTTPException(status_code=404, detail="Material não encontrado.")
+    material, path = result
+    return FileResponse(path, filename=material.file_name, media_type=material.mime_type)
 
 
 @app.get("/api/browse")

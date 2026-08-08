@@ -95,6 +95,16 @@
           <textarea class="input" id="course-note-textarea" style="width:100%;min-height:220px;resize:vertical;" placeholder="Notas gerais sobre o curso..."></textarea>
         </div>
         <div id="tab-materials" class="tab-pane hidden">
+          <div class="materials-upload-row">
+            <label class="btn btn-secondary" for="material-upload-input">
+              <i class="ph ph-paperclip"></i> Anexar arquivo
+            </label>
+            <input type="file" id="material-upload-input" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.ogg,.flac,.aac" class="hidden" />
+            <span class="text-muted" style="font-size:12px;">Imagem, áudio ou PDF · até 50 MB</span>
+          </div>
+          <div id="video-materials-list"></div>
+
+          <h3 style="font-size:13px;margin:var(--space-4) 0 var(--space-2);color:var(--color-neutral-400);">Encontrados na pasta do curso</h3>
           <div id="materials-list"></div>
         </div>
       </div>

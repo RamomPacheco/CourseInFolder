@@ -18,6 +18,13 @@ MATERIAL_EXTENSIONS = frozenset({
     ".png", ".jpg", ".jpeg",
 })
 
+UPLOAD_EXTENSIONS = frozenset({
+    ".pdf",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+    ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac",
+})
+MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
+
 
 def get_data_dir() -> Path:
     if sys.platform == "win32":
@@ -31,3 +38,13 @@ def get_data_dir() -> Path:
 
 def get_database_path() -> Path:
     return get_data_dir() / "data.db"
+
+
+def get_course_materials_dir(course_id) -> Path:
+    return get_data_dir() / "materials" / str(course_id)
+
+
+def get_video_materials_dir(course_id, video_id) -> Path:
+    d = get_course_materials_dir(course_id) / str(video_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d

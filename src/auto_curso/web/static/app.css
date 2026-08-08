@@ -85,9 +85,14 @@ i[class^="ph"] { line-height: 1; }
 .note-row-text { flex: 1; font-size: 13px; }
 .note-row .ph-trash { cursor: pointer; color: var(--color-neutral-400); }
 .material-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-neutral-800); text-decoration: none; color: inherit; }
-.material-row i.ph-file { font-size: 18px; color: var(--color-accent-300); }
-.material-row-name { flex: 1; font-size: 13px; }
+.material-row > i:first-child { font-size: 18px; color: var(--color-accent-300); flex: none; }
+.material-row-name { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .material-row i.ph-download-simple { color: var(--color-neutral-400); }
+.material-row i.ph-trash { color: var(--color-neutral-400); cursor: pointer; flex: none; }
+.material-row i.ph-trash:hover { color: var(--color-accent); }
+.material-row a { color: var(--color-neutral-400); display: flex; flex: none; }
+
+.materials-upload-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 
 @media (max-width: 900px) {
   .player-layout { flex-direction: column; }

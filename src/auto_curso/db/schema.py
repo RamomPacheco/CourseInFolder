@@ -57,4 +57,16 @@ def initialize_database() -> None:
                 VideoId TEXT PRIMARY KEY,
                 FOREIGN KEY (VideoId) REFERENCES Videos(Id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS VideoMaterials (
+                Id TEXT PRIMARY KEY,
+                VideoId TEXT NOT NULL,
+                FileName TEXT NOT NULL,
+                StoredName TEXT NOT NULL,
+                MimeType TEXT NOT NULL,
+                SizeBytes INTEGER NOT NULL,
+                UploadedAt TEXT NOT NULL,
+                FOREIGN KEY (VideoId) REFERENCES Videos(Id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS IX_VideoMaterials_VideoId ON VideoMaterials(VideoId);
         """)

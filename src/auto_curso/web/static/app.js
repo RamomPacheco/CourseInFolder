@@ -328,6 +328,7 @@ function loadVideoIntoPlayer(v) {
   }, 4000);
 
   loadNotes(v.id);
+  if (state.activeTab === "materials") loadMaterials();
   renderSidebarList();
 }
 
@@ -487,9 +488,55 @@ el("course-note-textarea").addEventListener("input", (e) => {
   }, 500);
 });
 
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function materialIconClass(name, mimeType) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  if (mimeType?.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return "ph ph-image";
+  if (mimeType?.startsWith("audio/") || ["mp3", "wav", "m4a", "ogg", "flac", "aac"].includes(ext)) return "ph ph-file-audio";
+  if (ext === "pdf") return "ph ph-file-pdf";
+  return "ph ph-file";
+}
+
 async function loadMaterials() {
-  const materials = await api(`/api/courses/${state.currentCourseId}/materials`);
-  el("materials-count").textContent = materials.length;
+  const [videoMaterials, courseMaterials] = await Promise.all([
+    state.currentVideoId ? api(`/api/videos/${state.currentVideoId}/materials`) : Promise.resolve([]),
+    api(`/api/courses/${state.currentCourseId}/materials`),
+  ]);
+  el("materials-count").textContent = videoMaterials.length + courseMaterials.length;
+  renderVideoMaterials(videoMaterials);
+  renderCourseMaterials(courseMaterials);
+}
+
+function renderVideoMaterials(materials) {
+  const list = el("video-materials-list");
+  list.innerHTML = "";
+  if (materials.length === 0) {
+    list.innerHTML = `<div class="empty-state">Nenhum arquivo anexado a esta aula.</div>`;
+    return;
+  }
+  for (const m of materials) {
+    const row = document.createElement("div");
+    row.className = "material-row";
+    row.innerHTML = `
+      <i class="${materialIconClass(m.file_name, m.mime_type)}"></i>
+      <div class="material-row-name">${escapeHtml(m.file_name)}</div>
+      <span class="text-muted" style="font-size:11px;">${formatBytes(m.size_bytes)}</span>
+      <a href="/api/materials/${m.id}/download" title="Baixar"><i class="ph ph-download-simple"></i></a>
+      <i class="ph ph-trash" title="Remover"></i>`;
+    row.querySelector(".ph-trash").addEventListener("click", async () => {
+      await api(`/api/materials/${m.id}`, { method: "DELETE" });
+      loadMaterials();
+    });
+    list.appendChild(row);
+  }
+}
+
+function renderCourseMaterials(materials) {
   const list = el("materials-list");
   list.innerHTML = "";
   if (materials.length === 0) {
@@ -501,12 +548,34 @@ async function loadMaterials() {
     a.className = "material-row";
     a.href = `/api/courses/${state.currentCourseId}/materials/download?path=${encodeURIComponent(m.relative_path)}`;
     a.innerHTML = `
-      <i class="ph ph-file"></i>
+      <i class="${materialIconClass(m.name)}"></i>
       <div class="material-row-name">${escapeHtml(m.name)}</div>
       <i class="ph ph-download-simple"></i>`;
     list.appendChild(a);
   }
 }
+
+el("material-upload-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !state.currentVideoId) return;
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await fetch(`/api/videos/${state.currentVideoId}/materials`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || res.statusText);
+    }
+    loadMaterials();
+    showToast("Material anexado.");
+  } catch (err) {
+    showToast(err.message);
+  }
+});
 
 /* ───────────────── add course / folder browser ───────────────── */
 
