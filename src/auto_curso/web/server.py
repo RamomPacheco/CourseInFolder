@@ -317,10 +317,12 @@ app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
 
 def main() -> None:
+    import os
     import uvicorn
 
     initialize_database()
-    threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
+    if os.environ.get("AUTO_CURSO_OPEN_BROWSER", "1") != "0":
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
 
 
