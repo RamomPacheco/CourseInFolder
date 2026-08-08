@@ -36,4 +36,25 @@ def initialize_database() -> None:
             );
 
             CREATE INDEX IF NOT EXISTS IX_Videos_CourseId ON Videos(CourseId);
+
+            CREATE TABLE IF NOT EXISTS VideoNotes (
+                Id TEXT PRIMARY KEY,
+                VideoId TEXT NOT NULL,
+                TimeSeconds REAL NOT NULL,
+                Text TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (VideoId) REFERENCES Videos(Id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS IX_VideoNotes_VideoId ON VideoNotes(VideoId);
+
+            CREATE TABLE IF NOT EXISTS CourseNotes (
+                CourseId TEXT PRIMARY KEY,
+                Text TEXT NOT NULL,
+                FOREIGN KEY (CourseId) REFERENCES Courses(Id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS VideoFavorites (
+                VideoId TEXT PRIMARY KEY,
+                FOREIGN KEY (VideoId) REFERENCES Videos(Id) ON DELETE CASCADE
+            );
         """)

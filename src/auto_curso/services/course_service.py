@@ -7,9 +7,11 @@ from uuid import UUID, uuid4
 
 from auto_curso.constants import COMPLETION_THRESHOLD
 from auto_curso.models.course import Course, CourseSummary
+from auto_curso.models.note import VideoNote
 from auto_curso.models.progress import PlaybackProgress
-from auto_curso.models.video import Video, VideoWithProgress
+from auto_curso.models.video import ScannedVideoFile, Video, VideoWithProgress
 from auto_curso.repositories.course_repository import CourseRepository
+from auto_curso.repositories.notes_repository import NotesRepository
 from auto_curso.repositories.progress_repository import ProgressRepository
 from auto_curso.services.folder_scanner import FolderScanner
 
@@ -20,10 +22,12 @@ class CourseService:
         course_repo: CourseRepository | None = None,
         progress_repo: ProgressRepository | None = None,
         scanner: FolderScanner | None = None,
+        notes_repo: NotesRepository | None = None,
     ) -> None:
         self._courses = course_repo or CourseRepository()
         self._progress = progress_repo or ProgressRepository()
         self._scanner = scanner or FolderScanner()
+        self._notes = notes_repo or NotesRepository()
 
     def add_course(self, folder_path: str) -> CourseSummary:
         normalized = str(Path(folder_path).resolve())
@@ -163,6 +167,33 @@ class CourseService:
             )
             for video in videos
         ]
+
+    def get_favorites(self, course_id: UUID) -> set[UUID]:
+        return self._notes.get_favorites_for_course(course_id)
+
+    def toggle_favorite(self, video_id: UUID) -> bool:
+        return self._notes.toggle_favorite(video_id)
+
+    def get_video_notes(self, video_id: UUID) -> list[VideoNote]:
+        return self._notes.list_for_video(video_id)
+
+    def add_video_note(self, video_id: UUID, time_seconds: float, text: str) -> VideoNote:
+        return self._notes.add(video_id, time_seconds, text)
+
+    def delete_video_note(self, note_id: UUID) -> None:
+        self._notes.delete(note_id)
+
+    def get_course_note(self, course_id: UUID) -> str:
+        return self._notes.get_course_note(course_id)
+
+    def save_course_note(self, course_id: UUID, text: str) -> None:
+        self._notes.save_course_note(course_id, text)
+
+    def get_materials(self, course_id: UUID) -> list[ScannedVideoFile]:
+        course = self._courses.get_by_id(course_id)
+        if course is None:
+            raise ValueError("Curso não encontrado.")
+        return self._scanner.scan_materials(course.folder_path)
 
     def _sync_videos(self, course: Course) -> None:
         scanned = self._scanner.scan(course.folder_path)

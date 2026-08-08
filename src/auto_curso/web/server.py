@@ -4,17 +4,18 @@ import mimetypes
 import re
 import threading
 import webbrowser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from auto_curso.db.schema import initialize_database
 from auto_curso.helpers import format_seconds
 from auto_curso.repositories.course_repository import CourseRepository
+from auto_curso.repositories.notes_repository import NotesRepository
 from auto_curso.repositories.progress_repository import ProgressRepository
 from auto_curso.services.course_service import CourseService
 
@@ -27,7 +28,8 @@ app = FastAPI(title="Video Learning Tracker")
 
 course_repo = CourseRepository()
 progress_repo = ProgressRepository()
-course_service = CourseService(course_repo, progress_repo)
+notes_repo = NotesRepository()
+course_service = CourseService(course_repo, progress_repo, notes_repo=notes_repo)
 
 
 class AddCourseBody(BaseModel):
@@ -43,6 +45,15 @@ class CompletedBody(BaseModel):
     completed: bool
 
 
+class NoteBody(BaseModel):
+    time_seconds: float
+    text: str
+
+
+class CourseNoteBody(BaseModel):
+    text: str
+
+
 def _course_summary_json(summary) -> dict:
     return {
         "id": str(summary.course.id),
@@ -55,17 +66,24 @@ def _course_summary_json(summary) -> dict:
     }
 
 
-def _video_json(vwp) -> dict:
+def _module_of(relative_path: str) -> str | None:
+    parent = PurePosixPath(relative_path).parent
+    return None if str(parent) == "." else str(parent)
+
+
+def _video_json(vwp, favorites: set[UUID] | None = None) -> dict:
     return {
         "id": str(vwp.video.id),
         "file_name": vwp.video.file_name,
         "relative_path": vwp.video.relative_path,
+        "module": _module_of(vwp.video.relative_path),
         "sort_order": vwp.video.sort_order,
         "duration_seconds": vwp.video.duration_seconds,
         "duration_label": format_seconds(vwp.video.duration_seconds or 0),
         "position_seconds": vwp.progress.position_seconds if vwp.progress else 0.0,
         "watched_percent": vwp.progress_percent,
         "is_completed": vwp.is_completed,
+        "is_favorite": vwp.video.id in favorites if favorites is not None else False,
     }
 
 
@@ -104,7 +122,8 @@ def list_videos(course_id: UUID) -> list[dict]:
         videos = course_service.get_videos_with_progress(course_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return [_video_json(v) for v in videos]
+    favorites = course_service.get_favorites(course_id)
+    return [_video_json(v, favorites) for v in videos]
 
 
 @app.get("/api/continue-watching")
@@ -191,6 +210,80 @@ def stream_video(video_id: UUID, request: Request):
     return StreamingResponse(
         iterfile(), status_code=status_code, media_type=media_type, headers=headers
     )
+
+
+@app.post("/api/videos/{video_id}/favorite")
+def toggle_favorite(video_id: UUID) -> dict:
+    is_favorite = course_service.toggle_favorite(video_id)
+    return {"is_favorite": is_favorite}
+
+
+@app.get("/api/videos/{video_id}/notes")
+def list_notes(video_id: UUID) -> list[dict]:
+    notes = course_service.get_video_notes(video_id)
+    return [
+        {
+            "id": str(n.id),
+            "time_seconds": n.time_seconds,
+            "time_label": format_seconds(n.time_seconds),
+            "text": n.text,
+        }
+        for n in notes
+    ]
+
+
+@app.post("/api/videos/{video_id}/notes")
+def add_note(video_id: UUID, body: NoteBody) -> dict:
+    note = course_service.add_video_note(video_id, body.time_seconds, body.text)
+    return {
+        "id": str(note.id),
+        "time_seconds": note.time_seconds,
+        "time_label": format_seconds(note.time_seconds),
+        "text": note.text,
+    }
+
+
+@app.delete("/api/notes/{note_id}")
+def delete_note(note_id: UUID) -> dict:
+    course_service.delete_video_note(note_id)
+    return {"ok": True}
+
+
+@app.get("/api/courses/{course_id}/notes")
+def get_course_note(course_id: UUID) -> dict:
+    return {"text": course_service.get_course_note(course_id)}
+
+
+@app.put("/api/courses/{course_id}/notes")
+def save_course_note(course_id: UUID, body: CourseNoteBody) -> dict:
+    course_service.save_course_note(course_id, body.text)
+    return {"ok": True}
+
+
+@app.get("/api/courses/{course_id}/materials")
+def list_materials(course_id: UUID) -> list[dict]:
+    try:
+        materials = course_service.get_materials(course_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [
+        {"name": m.file_name, "relative_path": m.relative_path, "size_bytes": m.file_size_bytes}
+        for m in materials
+    ]
+
+
+@app.get("/api/courses/{course_id}/materials/download")
+def download_material(course_id: UUID, path: str):
+    course = course_repo.get_by_id(course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="Curso não encontrado.")
+
+    root = Path(course.folder_path).resolve()
+    full_path = (root / path).resolve()
+    if root not in full_path.parents or not full_path.is_file():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+
+    return FileResponse(full_path, filename=full_path.name)
 
 
 @app.get("/api/browse")

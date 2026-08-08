@@ -4,68 +4,102 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Video Learning Tracker</title>
+<link rel="stylesheet" href="/vendor/phosphor/regular/style.css" />
+<link rel="stylesheet" href="/vendor/phosphor/fill/style.css" />
 <link rel="stylesheet" href="/styles.css" />
 <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
 <div id="app">
   <div class="nav">
-    <div class="nav-brand">
-      <svg class="icon" viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5-10-5Z" stroke-linejoin="round"/><path d="M6 10.5V16c0 1.5 2.5 3 6 3s6-1.5 6-3v-5.5" stroke-linejoin="round"/></svg>
+    <div class="nav-brand" id="brand-link">
+      <i class="ph-fill ph-graduation-cap" style="color:var(--color-accent);"></i>
       Video Learning Tracker
     </div>
-    <div class="nav-search">
+    <div style="flex:1;max-width:420px;">
       <input class="input" id="search-input" type="text" placeholder="Buscar cursos..." />
     </div>
     <button class="btn btn-primary" id="add-course-btn">
-      <svg class="icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke-linejoin="round"/><path d="M12 11v5M9.5 13.5h5"/></svg>
-      Adicionar curso
+      <i class="ph ph-folder-plus"></i> Adicionar curso
     </button>
   </div>
 
-  <main>
-    <!-- LIBRARY VIEW -->
-    <section id="view-library">
-      <div id="continue-watching-wrap"></div>
+  <!-- LIBRARY VIEW -->
+  <section id="view-library" class="view">
+    <div id="continue-watching-wrap"></div>
+    <h2 class="section-title">Meus cursos</h2>
+    <div id="course-grid" class="course-grid"></div>
+  </section>
 
-      <h2 class="section-title">Meus cursos</h2>
-      <div id="course-grid" class="course-grid"></div>
-    </section>
-
-    <!-- COURSE VIEW -->
-    <section id="view-course" class="hidden">
-      <button class="btn btn-ghost" id="back-btn">&larr; Cursos</button>
-      <div class="course-header">
-        <h2 id="course-title">&nbsp;</h2>
-        <div class="filter-seg" id="filter-seg">
-          <button data-filter="all" class="active">Todos</button>
-          <button data-filter="pending">Pendentes</button>
-          <button data-filter="done">Concluídos</button>
+  <!-- PLAYER VIEW -->
+  <section id="view-player" class="view hidden player-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <button class="btn btn-ghost" id="back-btn"><i class="ph ph-arrow-left"></i> Cursos</button>
+        <div class="card-title" id="course-title" style="margin-top:var(--space-2);"></div>
+        <div class="card-meta" id="course-meta"></div>
+        <div class="progress-bar"><span id="course-progress-bar" style="width:0%"></span></div>
+        <div class="filter-row" id="filter-seg">
+          <button class="btn btn-ghost filter-btn active" data-filter="all">Todos</button>
+          <button class="btn btn-ghost filter-btn" data-filter="pending">Pendentes</button>
+          <button class="btn btn-ghost filter-btn" data-filter="completed">Concluídos</button>
         </div>
-        <button class="btn btn-secondary" id="refresh-course-btn">Atualizar</button>
-        <button class="btn btn-secondary" id="remove-course-btn">Remover</button>
+        <button class="btn btn-secondary btn-block" id="refresh-course-btn"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+        <button class="btn btn-secondary btn-block" id="remove-course-btn"><i class="ph ph-trash"></i> Remover curso</button>
+      </div>
+      <div class="sidebar-list" id="sidebar-list"></div>
+    </aside>
+
+    <div class="player-main">
+      <div class="player-surface" id="player-surface">
+        <video id="player-video" class="hidden"></video>
+        <div class="player-empty" id="player-empty">Selecione uma aula</div>
       </div>
 
-      <div class="course-layout">
-        <div class="card elev-sm" style="padding:0;">
-          <table class="table" id="video-table">
-            <thead>
-              <tr><th></th><th>Vídeo</th><th>Duração</th><th>Progresso</th></tr>
-            </thead>
-            <tbody id="video-tbody"></tbody>
-          </table>
+      <div class="player-controls">
+        <div class="controls-row">
+          <button class="btn-icon" id="play-btn"><i class="ph-fill ph-play" id="play-icon"></i></button>
+          <button class="btn-icon" id="skip-back-btn"><i class="ph ph-arrow-counter-clockwise"></i></button>
+          <button class="btn-icon" id="skip-fwd-btn"><i class="ph ph-arrow-clockwise"></i></button>
+          <span class="time-label" id="time-label">--:-- / --:--</span>
+          <input type="range" id="seek-range" class="seek-range" min="0" max="100" value="0" step="0.1" />
+          <select class="input speed-select" id="speed-select">
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="1.75">1.75x</option>
+            <option value="2">2x</option>
+          </select>
+          <button class="btn-icon" id="fullscreen-btn"><i class="ph ph-corners-out"></i></button>
+          <button class="btn btn-ghost" id="complete-btn"><i class="ph ph-check-circle"></i> Marcar como concluída</button>
         </div>
+        <div class="card-title" id="player-video-title" style="font-size:15px;"></div>
+      </div>
 
-        <div class="player-panel card elev-sm">
-          <div id="player-empty" class="player-empty">Selecione um vídeo na lista</div>
-          <div id="player-video-wrap" class="player-video-wrap hidden">
-            <video id="player-video" controls></video>
+      <div class="player-tabs">
+        <button class="btn btn-ghost tab-btn active" data-tab="notes"><i class="ph ph-note-pencil"></i> Anotações do vídeo</button>
+        <button class="btn btn-ghost tab-btn" data-tab="course-notes"><i class="ph ph-notebook"></i> Notas do curso</button>
+        <button class="btn btn-ghost tab-btn" data-tab="materials"><i class="ph ph-paperclip"></i> Materiais (<span id="materials-count">0</span>)</button>
+      </div>
+
+      <div class="player-tab-content">
+        <div id="tab-notes" class="tab-pane">
+          <div class="note-input-row">
+            <input class="input" id="note-input" placeholder="Escreva uma anotação no tempo atual..." />
+            <button class="btn btn-primary" id="add-note-btn"><i class="ph ph-plus"></i> <span id="note-time-label">em 00:00</span></button>
           </div>
-          <div id="player-title" class="player-title"></div>
+          <div id="notes-list"></div>
+        </div>
+        <div id="tab-course-notes" class="tab-pane hidden">
+          <textarea class="input" id="course-note-textarea" style="width:100%;min-height:220px;resize:vertical;" placeholder="Notas gerais sobre o curso..."></textarea>
+        </div>
+        <div id="tab-materials" class="tab-pane hidden">
+          <div id="materials-list"></div>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </section>
 </div>
 
 <!-- ADD COURSE / FOLDER BROWSER DIALOG -->

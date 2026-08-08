@@ -13,6 +13,11 @@ VIDEO_EXTENSIONS = frozenset({
     ".mpeg", ".mpg", ".3gp", ".ogv",
 })
 
+MATERIAL_EXTENSIONS = frozenset({
+    ".pdf", ".csv", ".txt", ".zip", ".docx", ".pptx", ".xlsx", ".md",
+    ".png", ".jpg", ".jpeg",
+})
+
 
 def get_data_dir() -> Path:
     if sys.platform == "win32":
