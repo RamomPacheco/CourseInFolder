@@ -10,8 +10,22 @@ from auto_curso.models.video import ScannedVideoFile
 
 
 class FolderScanner:
+    """Varre a pasta local de um curso em busca de arquivos de vídeo e de material."""
+
     def scan_materials(self, folder_path: str) -> list[ScannedVideoFile]:
-        """Escaneia uma pasta e retorna arquivos de material (PDF, planilhas, imagens etc)."""
+        """Escaneia uma pasta e retorna arquivos de material (PDF, planilhas, imagens etc).
+
+        Args:
+            folder_path (str): O caminho da pasta a ser escaneada.
+
+        Raises:
+            FileNotFoundError: Se a pasta não for encontrada.
+
+        Returns:
+            list[ScannedVideoFile]: Arquivos cuja extensão está em
+                `MATERIAL_EXTENSIONS`, ordenados naturalmente pelo
+                caminho relativo.
+        """
         root = Path(folder_path).resolve()
         if not root.is_dir():
             raise FileNotFoundError(f"Pasta não encontrada: {root}")
@@ -47,7 +61,8 @@ class FolderScanner:
             FileNotFoundError: Se a pasta não for encontrada.
 
         Returns:
-            list[ScannedVideoFile]: Uma lista de arquivos de vídeo.
+            list[ScannedVideoFile]: Arquivos cuja extensão está em
+                `VIDEO_EXTENSIONS`, ordenados naturalmente pelo caminho relativo.
         """
         root = Path(folder_path).resolve()
         if not root.is_dir():

@@ -7,6 +7,8 @@ from uuid import UUID
 
 @dataclass
 class UploadedMaterial:
+    """Arquivo (imagem, áudio ou PDF) anexado pelo usuário a uma aula específica."""
+
     id: UUID
     video_id: UUID
     file_name: str

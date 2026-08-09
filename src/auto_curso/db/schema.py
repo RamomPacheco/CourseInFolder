@@ -21,6 +21,17 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Aplica, de forma idempotente, as colunas novas ainda ausentes em bancos já existentes.
+
+    `CREATE TABLE IF NOT EXISTS` não retrofita colunas em uma tabela
+    que já existe, então cada entrada de `_MIGRATIONS` é conferida via
+    `PRAGMA table_info` antes de rodar o `ALTER TABLE ADD COLUMN`
+    correspondente — seguro para chamar repetidamente e não apaga
+    nenhum dado existente.
+
+    Args:
+        conn (sqlite3.Connection): Conexão aberta a usar para as migrações.
+    """
     for table, column, definition in _MIGRATIONS:
         existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in existing:
@@ -28,6 +39,12 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
 
 
 def initialize_database() -> None:
+    """Cria as tabelas do banco (se necessário) e aplica migrações pendentes.
+
+    Chamado no startup do servidor (ver `web.server.lifespan`) e
+    também em `main()`, como rede de segurança para quem rodar o
+    módulo diretamente. Seguro para chamar múltiplas vezes.
+    """
     with get_connection() as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript("""
