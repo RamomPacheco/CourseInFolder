@@ -188,7 +188,7 @@ a:hover { text-decoration: underline; }
 /* — dialog — */
 .dialog-backdrop {
   position: fixed; inset: 0; display: grid; place-items: center;
-  padding: var(--space-4); z-index: 50;
+  padding: var(--space-4); z-index: 90;
   background: color-mix(in srgb, var(--color-neutral-900) 60%, transparent);
 }
 .dialog {

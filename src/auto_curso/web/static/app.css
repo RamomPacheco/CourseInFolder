@@ -1,5 +1,7 @@
-html, body { height: 100%; }
-#app { min-height: 100vh; display: flex; flex-direction: column; }
+html, body { height: 100%; overflow: hidden; }
+/* Fixed (not min-) height so descendant flex/overflow-y:auto panes clip and
+   scroll internally instead of growing #app and scrolling the whole page. */
+#app { height: 100vh; display: flex; flex-direction: column; }
 #app > .view { flex: 1; min-height: 0; }
 
 .nav { border-bottom: 1px solid var(--color-divider); flex: none; }
@@ -63,10 +65,47 @@ i[class^="ph"] { line-height: 1; }
 .fav-icon { font-size: 14px; color: var(--color-neutral-600); flex: none; }
 .fav-icon.active { color: var(--color-accent-300); }
 
-.player-main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-.player-surface { background: #000; aspect-ratio: 16 / 9; max-height: 52vh; display: flex; align-items: center; justify-content: center; flex: none; }
+.player-main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; position: relative; }
+#player-surface-sentinel { height: 1px; flex: none; }
+
+/* Sticky by default: stays pinned to the top of .player-main's own scroll
+   area while the controls/tabs/notes below it scroll underneath. */
+.player-surface {
+  background: #000; aspect-ratio: 16 / 9; max-height: 52vh; display: flex; align-items: center; justify-content: center; flex: none;
+  position: sticky; top: 0; z-index: 5;
+  width: 100%;
+}
 .player-surface video { width: 100%; height: 100%; }
 .player-empty { color: var(--color-neutral-400); }
+
+.mini-restore-btn {
+  display: none;
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: rgba(0, 0, 0, 0.6); color: #fff;
+  align-items: center; justify-content: center; cursor: pointer;
+}
+.mini-restore-btn:hover { background: rgba(0, 0, 0, 0.8); }
+
+/* Scrolled past the sticky position: detach into a floating corner mini-player. */
+.player-surface.is-mini {
+  position: fixed;
+  top: auto; left: auto;
+  bottom: 16px; right: 16px;
+  width: 320px; height: 180px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  aspect-ratio: 16 / 9;
+  z-index: 60;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+.player-surface.is-mini .mini-restore-btn { display: flex; }
+
+@media (max-width: 480px) {
+  .player-surface.is-mini { width: 200px; height: 112px; bottom: 12px; right: 12px; }
+}
 
 .player-controls { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-neutral-800); }
 .controls-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }

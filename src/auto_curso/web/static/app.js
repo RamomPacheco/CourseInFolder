@@ -290,7 +290,38 @@ function stopPlayer() {
   el("player-video-title").textContent = "";
   el("time-label").textContent = "--:-- / --:--";
   el("seek-range").value = 0;
+  el("player-surface").classList.remove("is-mini");
 }
+
+/* Sticky player + floating mini-player: the surface sticks to the top of
+   .player-main while scrolling its own content (controls/tabs/notes). Once
+   scrolled far enough that the sentinel above it leaves .player-main's
+   viewport, it detaches into a fixed corner mini-player instead. */
+let miniPlayerObserver = null;
+
+function setupMiniPlayerObserver() {
+  if (miniPlayerObserver) return;
+  const surface = el("player-surface");
+  const sentinel = el("player-surface-sentinel");
+  miniPlayerObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[entries.length - 1];
+      if (!state.currentVideoId) {
+        surface.classList.remove("is-mini");
+        return;
+      }
+      surface.classList.toggle("is-mini", !entry.isIntersecting);
+    },
+    { root: el("player-main"), threshold: 0 }
+  );
+  miniPlayerObserver.observe(sentinel);
+}
+
+el("mini-restore-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  el("player-surface").classList.remove("is-mini");
+  el("player-surface-sentinel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 function loadVideoIntoPlayer(v) {
   const videoEl = el("player-video");
@@ -631,5 +662,7 @@ el("browse-select-btn").addEventListener("click", async () => {
     showToast(e.message);
   }
 });
+
+setupMiniPlayerObserver();
 
 loadLibrary().catch((e) => showToast(e.message));
