@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from auto_curso.constants import (
     COMPLETION_THRESHOLD,
+    COVER_EXTENSIONS,
+    MAX_COVER_SIZE_BYTES,
     MAX_UPLOAD_SIZE_BYTES,
+    SOFT_DELETE_GRACE_SECONDS,
     UPLOAD_EXTENSIONS,
+    get_course_cover_dir,
+    get_course_manual_videos_dir,
     get_course_materials_dir,
+    get_manual_video_dir,
     get_video_materials_dir,
 )
 from auto_curso.models.course import Course, CourseSummary
@@ -40,6 +46,8 @@ class CourseService:
         self._notes = notes_repo or NotesRepository()
         self._uploads = uploads_repo or MaterialsRepository()
 
+    # ───────────────────────── courses ─────────────────────────
+
     def add_course(self, folder_path: str) -> CourseSummary:
         normalized = str(Path(folder_path).resolve())
         if not os.path.isdir(normalized):
@@ -67,9 +75,40 @@ class CourseService:
         self._sync_videos(course)
         return self._build_summary(course)
 
-    def remove_course(self, course_id: UUID) -> None:
-        self._courses.delete(course_id)
-        shutil.rmtree(get_course_materials_dir(course_id), ignore_errors=True)
+    def update_course(self, course_id: UUID, name: str, description: str | None) -> CourseSummary:
+        course = self._courses.get_by_id(course_id)
+        if course is None:
+            raise ValueError("Curso não encontrado.")
+        if not name or not name.strip():
+            raise ValueError("Nome do curso não pode ser vazio.")
+        self._courses.update(course_id, name.strip(), description)
+        return self._build_summary(self._courses.get_by_id(course_id))
+
+    def set_course_cover(self, course_id: UUID, file_name: str, data: bytes, mime_type: str) -> str:
+        course = self._courses.get_by_id(course_id)
+        if course is None:
+            raise ValueError("Curso não encontrado.")
+        extension = Path(file_name).suffix.lower()
+        if extension not in COVER_EXTENSIONS:
+            raise ValueError(f"Tipo de imagem não suportado ({extension or 'sem extensão'}).")
+        if len(data) > MAX_COVER_SIZE_BYTES:
+            raise ValueError("Imagem muito grande (máximo 10 MB).")
+
+        if course.cover_stored_name:
+            (get_course_cover_dir(course_id) / course.cover_stored_name).unlink(missing_ok=True)
+
+        stored_name = f"{uuid4()}{extension}"
+        (get_course_cover_dir(course_id) / stored_name).write_bytes(data)
+        self._courses.set_cover(course_id, stored_name)
+        return stored_name
+
+    def soft_delete_course(self, course_id: UUID) -> None:
+        if self._courses.get_by_id(course_id) is None:
+            raise ValueError("Curso não encontrado.")
+        self._courses.soft_delete(course_id)
+
+    def restore_course(self, course_id: UUID) -> None:
+        self._courses.restore(course_id)
 
     def get_course_summaries(self) -> list[CourseSummary]:
         return [self._build_summary(c) for c in self._courses.get_all()]
@@ -79,6 +118,8 @@ class CourseService:
         if course is None:
             raise ValueError("Curso não encontrado.")
         return self._build_summary(course)
+
+    # ───────────────────────── playback progress ─────────────────────────
 
     def set_video_completed(self, video_id: UUID, completed: bool) -> PlaybackProgress:
         existing = self._progress.get(video_id)
@@ -171,6 +212,8 @@ class CourseService:
             course,
         )
 
+    # ───────────────────────── videos ─────────────────────────
+
     def get_videos_with_progress(self, course_id: UUID) -> list[VideoWithProgress]:
         course = self._courses.get_by_id(course_id)
         if course is None:
@@ -187,11 +230,55 @@ class CourseService:
             for video in videos
         ]
 
+    def add_manual_video(
+        self, course_id: UUID, video_id: UUID, file_name: str, stored_name: str, size_bytes: int
+    ) -> Video:
+        course = self._courses.get_by_id(course_id)
+        if course is None:
+            raise ValueError("Curso não encontrado.")
+        sort_order = self._courses.get_next_sort_order(course_id)
+        video = Video(
+            id=video_id,
+            course_id=course_id,
+            relative_path=f"__manual__/{video_id}",
+            file_name=file_name,
+            sort_order=sort_order,
+            file_size_bytes=size_bytes,
+            is_manual=True,
+            manual_stored_name=stored_name,
+        )
+        self._courses.add_manual_video(video)
+        return video
+
+    def update_video(
+        self, video_id: UUID, display_title: str | None, sort_order: int | None
+    ) -> Video:
+        video = self._courses.get_video(video_id)
+        if video is None:
+            raise ValueError("Vídeo não encontrado.")
+        self._courses.update_video(video_id, display_title, sort_order)
+        video.display_title = display_title
+        if sort_order is not None:
+            video.sort_order = sort_order
+        return video
+
+    def soft_delete_video(self, video_id: UUID) -> None:
+        if self._courses.get_video(video_id) is None:
+            raise ValueError("Vídeo não encontrado.")
+        self._courses.soft_delete_video(video_id)
+
+    def restore_video(self, video_id: UUID) -> None:
+        self._courses.restore_video(video_id)
+
+    # ───────────────────────── favorites ─────────────────────────
+
     def get_favorites(self, course_id: UUID) -> set[UUID]:
         return self._notes.get_favorites_for_course(course_id)
 
     def toggle_favorite(self, video_id: UUID) -> bool:
         return self._notes.toggle_favorite(video_id)
+
+    # ───────────────────────── video notes ─────────────────────────
 
     def get_video_notes(self, video_id: UUID) -> list[VideoNote]:
         return self._notes.list_for_video(video_id)
@@ -199,14 +286,28 @@ class CourseService:
     def add_video_note(self, video_id: UUID, time_seconds: float, text: str) -> VideoNote:
         return self._notes.add(video_id, time_seconds, text)
 
-    def delete_video_note(self, note_id: UUID) -> None:
-        self._notes.delete(note_id)
+    def update_video_note(self, note_id: UUID, text: str) -> None:
+        if not text or not text.strip():
+            raise ValueError("O texto da anotação não pode ser vazio.")
+        if self._notes.get(note_id) is None:
+            raise ValueError("Anotação não encontrada.")
+        self._notes.update(note_id, text.strip())
+
+    def soft_delete_video_note(self, note_id: UUID) -> None:
+        if self._notes.get(note_id) is None:
+            raise ValueError("Anotação não encontrada.")
+        self._notes.soft_delete(note_id)
+
+    def restore_video_note(self, note_id: UUID) -> None:
+        self._notes.restore(note_id)
 
     def get_course_note(self, course_id: UUID) -> str:
         return self._notes.get_course_note(course_id)
 
     def save_course_note(self, course_id: UUID, text: str) -> None:
         self._notes.save_course_note(course_id, text)
+
+    # ───────────────────────── materials ─────────────────────────
 
     def get_materials(self, course_id: UUID) -> list[ScannedVideoFile]:
         course = self._courses.get_by_id(course_id)
@@ -239,15 +340,20 @@ class CourseService:
 
         return self._uploads.add(video_id, file_name, stored_name, mime_type, len(data))
 
-    def delete_video_material(self, material_id: UUID) -> None:
-        material = self._uploads.get(material_id)
-        if material is None:
-            return
-        self._uploads.delete(material_id)
-        video = self._courses.get_video(material.video_id)
-        if video is not None:
-            path = get_video_materials_dir(video.course_id, material.video_id) / material.stored_name
-            path.unlink(missing_ok=True)
+    def rename_video_material(self, material_id: UUID, file_name: str) -> None:
+        if not file_name or not file_name.strip():
+            raise ValueError("O nome do arquivo não pode ser vazio.")
+        if self._uploads.get(material_id) is None:
+            raise ValueError("Material não encontrado.")
+        self._uploads.rename(material_id, file_name.strip())
+
+    def soft_delete_video_material(self, material_id: UUID) -> None:
+        if self._uploads.get(material_id) is None:
+            raise ValueError("Material não encontrado.")
+        self._uploads.soft_delete(material_id)
+
+    def restore_video_material(self, material_id: UUID) -> None:
+        self._uploads.restore(material_id)
 
     def get_video_material_path(self, material_id: UUID) -> tuple[UploadedMaterial, Path] | None:
         material = self._uploads.get(material_id)
@@ -259,8 +365,44 @@ class CourseService:
         path = get_video_materials_dir(video.course_id, material.video_id) / material.stored_name
         return material, path
 
+    # ───────────────────────── soft-delete purge (called periodically) ─────────────────────────
+
+    def purge_expired_soft_deletes(self) -> None:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=SOFT_DELETE_GRACE_SECONDS)
+        ).isoformat()
+
+        for material in self._uploads.get_expired_soft_deleted(cutoff):
+            video = self._courses.get_video(material.video_id, include_deleted=True)
+            if video is not None:
+                path = get_video_materials_dir(video.course_id, material.video_id) / material.stored_name
+                path.unlink(missing_ok=True)
+            self._uploads.hard_delete(material.id)
+
+        for video in self._courses.get_expired_soft_deleted_videos(cutoff):
+            if video.is_manual:
+                shutil.rmtree(get_manual_video_dir(video.course_id, video.id), ignore_errors=True)
+            else:
+                self._courses.add_excluded_path(video.course_id, video.relative_path)
+            shutil.rmtree(get_video_materials_dir(video.course_id, video.id), ignore_errors=True)
+            self._courses.hard_delete_video(video.id)
+
+        for note in self._notes.get_expired_soft_deleted(cutoff):
+            self._notes.hard_delete(note.id)
+
+        for course in self._courses.get_expired_soft_deleted(cutoff):
+            shutil.rmtree(get_course_materials_dir(course.id), ignore_errors=True)
+            shutil.rmtree(get_course_manual_videos_dir(course.id), ignore_errors=True)
+            shutil.rmtree(get_course_cover_dir(course.id), ignore_errors=True)
+            self._courses.hard_delete(course.id)
+
+    # ───────────────────────── internal ─────────────────────────
+
     def _sync_videos(self, course: Course) -> None:
         scanned = self._scanner.scan(course.folder_path)
+        excluded = self._courses.get_excluded_paths(course.id)
+        scanned = [f for f in scanned if f.relative_path not in excluded]
+
         videos = [
             Video(
                 id=uuid4(),
@@ -273,14 +415,15 @@ class CourseService:
             for index, file in enumerate(scanned)
         ]
 
-        existing = {v.relative_path: v for v in self._courses.get_videos(course.id)}
+        existing = {v.relative_path: v for v in self._courses.get_videos(course.id) if not v.is_manual}
         for video in videos:
             if old := existing.get(video.relative_path):
                 video.id = old.id
                 video.duration_seconds = old.duration_seconds
 
         self._courses.sync_videos(course.id, videos)
-        self._progress.delete_orphans(course.id, [v.id for v in videos])
+        manual_ids = [v.id for v in self._courses.get_videos(course.id) if v.is_manual]
+        self._progress.delete_orphans(course.id, [v.id for v in videos] + manual_ids)
 
     def _build_summary(self, course: Course) -> CourseSummary:
         videos = self._courses.get_videos(course.id)

@@ -15,7 +15,7 @@ class ProgressRepository:
                 SELECT p.VideoId, p.PositionSeconds, p.IsCompleted, p.WatchedPercent, p.LastWatchedAt
                 FROM PlaybackProgress p
                 INNER JOIN Videos v ON v.Id = p.VideoId
-                WHERE v.CourseId = ?
+                WHERE v.CourseId = ? AND v.DeletedAt IS NULL
                 """,
                 (str(course_id),),
             ).fetchall()
@@ -71,7 +71,7 @@ class ProgressRepository:
                 """
                 SELECT COUNT(*) FROM PlaybackProgress p
                 INNER JOIN Videos v ON v.Id = p.VideoId
-                WHERE v.CourseId = ? AND p.IsCompleted = 1
+                WHERE v.CourseId = ? AND p.IsCompleted = 1 AND v.DeletedAt IS NULL
                 """,
                 (str(course_id),),
             ).fetchone()

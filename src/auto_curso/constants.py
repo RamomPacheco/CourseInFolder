@@ -25,6 +25,13 @@ UPLOAD_EXTENSIONS = frozenset({
 })
 MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
 
+COVER_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+MAX_COVER_SIZE_BYTES = 10 * 1024 * 1024
+MAX_VIDEO_UPLOAD_SIZE_BYTES = 4 * 1024 * 1024 * 1024
+
+SOFT_DELETE_GRACE_SECONDS = 30
+PURGE_INTERVAL_SECONDS = 10
+
 
 def get_data_dir() -> Path:
     if sys.platform == "win32":
@@ -46,5 +53,21 @@ def get_course_materials_dir(course_id) -> Path:
 
 def get_video_materials_dir(course_id, video_id) -> Path:
     d = get_course_materials_dir(course_id) / str(video_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_course_manual_videos_dir(course_id) -> Path:
+    return get_data_dir() / "manual_videos" / str(course_id)
+
+
+def get_manual_video_dir(course_id, video_id) -> Path:
+    d = get_course_manual_videos_dir(course_id) / str(video_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_course_cover_dir(course_id) -> Path:
+    d = get_data_dir() / "covers" / str(course_id)
     d.mkdir(parents=True, exist_ok=True)
     return d

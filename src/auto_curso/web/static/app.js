@@ -12,6 +12,8 @@ const state = {
   saveTimer: null,
   activeTab: "notes",
   courseNoteTimer: null,
+  videoSearchTerm: "",
+  videoPage: 0,
 };
 
 const el = (id) => document.getElementById(id);
@@ -60,6 +62,70 @@ function escapeHtml(str) {
 function showView(name) {
   el("view-library").classList.toggle("hidden", name !== "library");
   el("view-player").classList.toggle("hidden", name !== "player");
+}
+
+/* ───────────────── secure delete: confirm modal + undo toast ─────────────────
+   Mandatory 3-layer flow for every delete in the app:
+   1) red confirm modal naming the item, 2) checkbox gate on the final button,
+   3) undo toast after a soft-delete, with a 30s server-side grace period
+   before the item is hard-deleted for good. No caller may bypass this. */
+
+let confirmDeleteState = null;
+
+function showConfirmDelete(itemName, onConfirmDelete, onUndo) {
+  confirmDeleteState = { onConfirmDelete, onUndo, itemName };
+  el("confirm-delete-message").textContent =
+    `Essa ação não poderá ser desfeita. O item "${itemName}" será permanentemente removido.`;
+  el("confirm-delete-checkbox").checked = false;
+  el("confirm-delete-confirm").disabled = true;
+  el("confirm-delete-dialog").classList.remove("hidden");
+}
+
+el("confirm-delete-checkbox").addEventListener("change", (e) => {
+  el("confirm-delete-confirm").disabled = !e.target.checked;
+});
+el("confirm-delete-cancel").addEventListener("click", () => {
+  el("confirm-delete-dialog").classList.add("hidden");
+  confirmDeleteState = null;
+});
+el("confirm-delete-confirm").addEventListener("click", async () => {
+  if (!confirmDeleteState) return;
+  const { onConfirmDelete, onUndo, itemName } = confirmDeleteState;
+  const btn = el("confirm-delete-confirm");
+  btn.disabled = true;
+  try {
+    await onConfirmDelete();
+    el("confirm-delete-dialog").classList.add("hidden");
+    confirmDeleteState = null;
+    showUndoToast(`"${itemName}" excluído com sucesso`, onUndo);
+  } catch (e) {
+    showToast(e.message);
+    btn.disabled = false;
+  }
+});
+
+function showUndoToast(message, onUndo) {
+  const toast = document.createElement("div");
+  toast.className = "toast undo-toast";
+  const text = document.createElement("span");
+  text.textContent = message;
+  toast.appendChild(text);
+  if (onUndo) {
+    const undoBtn = document.createElement("button");
+    undoBtn.textContent = "Desfazer";
+    undoBtn.addEventListener("click", async () => {
+      toast.remove();
+      try {
+        await onUndo();
+        showToast("Restaurado.");
+      } catch (e) {
+        showToast(e.message);
+      }
+    });
+    toast.appendChild(undoBtn);
+  }
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 5000);
 }
 
 /* ───────────────── library view ───────────────── */
@@ -119,17 +185,33 @@ function renderCourseGrid() {
   for (const c of filtered) {
     const card = document.createElement("div");
     card.className = "card course-card elev-sm";
+    const iconHtml = c.cover_url
+      ? `<img class="course-icon course-icon-img" src="${c.cover_url}" />`
+      : `<div class="course-icon"><i class="ph ph-folder-open"></i></div>`;
     card.innerHTML = `
+      <div class="course-card-actions">
+        <i class="ph ph-pencil-simple" title="Editar curso"></i>
+        <i class="ph ph-trash" title="Excluir curso"></i>
+      </div>
       <div class="course-card-head">
-        <div class="course-icon"><i class="ph ph-folder-open"></i></div>
+        ${iconHtml}
         <div style="min-width:0;">
           <div class="card-title">${escapeHtml(c.name)}</div>
           <div class="card-meta">Pasta local</div>
         </div>
       </div>
+      ${c.description ? `<div class="card-body course-description">${escapeHtml(c.description)}</div>` : ""}
       <div class="card-body">${c.completed_videos} de ${c.total_videos} aulas concluídas</div>
       <div class="progress-bar"><span style="width:${c.progress_percent}%"></span></div>`;
     card.addEventListener("click", () => openCourse(c.id));
+    card.querySelector(".ph-pencil-simple").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCourseEditDialog(c);
+    });
+    card.querySelector(".ph-trash").addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteCourseFlow(c, { fromPlayerView: false });
+    });
     grid.appendChild(card);
   }
 }
@@ -154,6 +236,9 @@ async function openCourse(courseId, autoplayVideoId) {
   state.currentCourseId = courseId;
   state.currentCourse = course;
   state.filter = "all";
+  state.videoSearchTerm = "";
+  state.videoPage = 0;
+  el("video-search-input").value = "";
   document.querySelectorAll(".filter-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === "all"));
 
   showView("player");
@@ -187,22 +272,39 @@ function getFilteredVideos() {
   });
 }
 
+const SIDEBAR_PAGE_SIZE = 60;
+
+function getVisibleVideos() {
+  const term = state.videoSearchTerm.trim().toLowerCase();
+  const filtered = getFilteredVideos();
+  if (!term) return filtered;
+  return filtered.filter((v) => (v.display_name || v.file_name).toLowerCase().includes(term));
+}
+
 function renderSidebarList() {
   const list = el("sidebar-list");
   list.innerHTML = "";
-  const filtered = getFilteredVideos();
+  const visible = getVisibleVideos();
+
+  if (visible.length === 0) {
+    list.innerHTML = `<div class="empty-state">Nenhuma aula encontrada.</div>`;
+    el("sidebar-pagination").innerHTML = "";
+    updateNavButtons();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / SIDEBAR_PAGE_SIZE));
+  state.videoPage = Math.min(state.videoPage, totalPages - 1);
+  const pageItems = visible.slice(
+    state.videoPage * SIDEBAR_PAGE_SIZE,
+    (state.videoPage + 1) * SIDEBAR_PAGE_SIZE
+  );
 
   const groups = new Map();
-  for (const v of filtered) {
+  for (const v of pageItems) {
     const key = v.module || "";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(v);
-  }
-
-  if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state">Nenhuma aula nesta lista.</div>`;
-    updateNavButtons();
-    return;
   }
 
   for (const [module, items] of groups) {
@@ -217,7 +319,134 @@ function renderSidebarList() {
     }
   }
 
+  renderSidebarPagination(visible.length, totalPages);
   updateNavButtons();
+}
+
+function renderSidebarPagination(total, totalPages) {
+  const pag = el("sidebar-pagination");
+  if (totalPages <= 1) {
+    pag.innerHTML = "";
+    return;
+  }
+  pag.innerHTML = `
+    <button id="sidebar-page-prev">‹ Anterior</button>
+    <span>${state.videoPage + 1} / ${totalPages} · ${total} aulas</span>
+    <button id="sidebar-page-next">Próxima ›</button>
+  `;
+  const prevBtn = pag.querySelector("#sidebar-page-prev");
+  const nextBtn = pag.querySelector("#sidebar-page-next");
+  prevBtn.disabled = state.videoPage === 0;
+  nextBtn.disabled = state.videoPage >= totalPages - 1;
+  prevBtn.addEventListener("click", () => {
+    state.videoPage--;
+    renderSidebarList();
+  });
+  nextBtn.addEventListener("click", () => {
+    state.videoPage++;
+    renderSidebarList();
+  });
+}
+
+el("video-search-input").addEventListener("input", (e) => {
+  state.videoSearchTerm = e.target.value;
+  state.videoPage = 0;
+  renderSidebarList();
+});
+
+/* ───────────────── video CRUD: add avulso / edit / delete ───────────────── */
+
+el("add-video-btn").addEventListener("click", () => {
+  el("video-add-file").value = "";
+  el("video-add-error").classList.add("hidden");
+  el("video-add-progress").classList.add("hidden");
+  el("video-add-dialog").classList.remove("hidden");
+});
+el("video-add-cancel").addEventListener("click", () => {
+  el("video-add-dialog").classList.add("hidden");
+});
+el("video-add-save").addEventListener("click", async () => {
+  const file = el("video-add-file").files[0];
+  const errEl = el("video-add-error");
+  errEl.classList.add("hidden");
+  if (!file) {
+    errEl.textContent = "Selecione um arquivo de vídeo.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  el("video-add-progress").classList.remove("hidden");
+  el("video-add-save").disabled = true;
+  try {
+    const res = await fetch(`/api/courses/${state.currentCourseId}/videos`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || res.statusText);
+    }
+    el("video-add-dialog").classList.add("hidden");
+    await loadVideos();
+    showToast("Vídeo anexado à playlist.");
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+  } finally {
+    el("video-add-progress").classList.add("hidden");
+    el("video-add-save").disabled = false;
+  }
+});
+
+let videoEditTargetId = null;
+
+function openVideoEditDialog(v) {
+  videoEditTargetId = v.id;
+  el("video-edit-title").value = v.display_title || "";
+  el("video-edit-title").placeholder = v.file_name;
+  el("video-edit-order").value = v.sort_order;
+  el("video-edit-error").classList.add("hidden");
+  el("video-edit-dialog").classList.remove("hidden");
+}
+el("video-edit-cancel").addEventListener("click", () => {
+  el("video-edit-dialog").classList.add("hidden");
+});
+el("video-edit-save").addEventListener("click", async () => {
+  const displayTitle = el("video-edit-title").value.trim() || null;
+  const sortOrder = el("video-edit-order").value === "" ? null : parseInt(el("video-edit-order").value, 10);
+  try {
+    await api(`/api/videos/${videoEditTargetId}`, {
+      method: "PUT",
+      body: JSON.stringify({ display_title: displayTitle, sort_order: sortOrder }),
+    });
+    el("video-edit-dialog").classList.add("hidden");
+    await loadVideos();
+    showToast("Aula atualizada.");
+  } catch (e) {
+    el("video-edit-error").textContent = e.message;
+    el("video-edit-error").classList.remove("hidden");
+  }
+});
+
+function deleteVideoFlow(v) {
+  const wasCurrent = v.id === state.currentVideoId;
+  showConfirmDelete(
+    v.display_name || v.file_name,
+    async () => {
+      await api(`/api/videos/${v.id}`, { method: "DELETE" });
+      if (wasCurrent) stopPlayer();
+      await loadVideos();
+      const updated = await api("/api/courses");
+      state.courses = updated;
+      const c = updated.find((c) => c.id === state.currentCourseId);
+      if (c) { state.currentCourse = c; renderCourseHeader(); }
+    },
+    async () => {
+      await api(`/api/videos/${v.id}/restore`, { method: "POST" });
+      await loadVideos();
+    }
+  );
 }
 
 function updateNavButtons() {
@@ -239,15 +468,27 @@ function renderSidebarItem(v) {
   row.innerHTML = `
     <i class="check-icon ${checkClass}"></i>
     <div class="sidebar-item-info">
-      <div class="sidebar-item-name">${escapeHtml(v.file_name)}</div>
+      <div class="sidebar-item-name">${escapeHtml(v.display_name || v.file_name)}${v.is_manual ? ' <i class="ph ph-link-simple" title="Vídeo avulso" style="font-size:11px;"></i>' : ""}</div>
       <div class="sidebar-item-duration">${durationLabel}</div>
     </div>
     <i class="fav-icon ${v.is_favorite ? "ph-fill ph-star active" : "ph ph-star"}"></i>
+    <div class="sidebar-item-actions">
+      <i class="ph ph-pencil-simple" title="Editar aula"></i>
+      <i class="ph ph-trash" title="Excluir aula"></i>
+    </div>
   `;
   row.addEventListener("click", () => loadVideoIntoPlayer(v));
   row.querySelector(".fav-icon").addEventListener("click", (e) => {
     e.stopPropagation();
     toggleFavorite(v.id);
+  });
+  row.querySelector(".ph-pencil-simple").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openVideoEditDialog(v);
+  });
+  row.querySelector(".sidebar-item-actions .ph-trash").addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteVideoFlow(v);
   });
   return row;
 }
@@ -262,6 +503,7 @@ async function toggleFavorite(videoId) {
 document.querySelectorAll(".filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     state.filter = btn.dataset.filter;
+    state.videoPage = 0;
     document.querySelectorAll(".filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
     renderSidebarList();
   });
@@ -283,11 +525,112 @@ el("refresh-course-btn").addEventListener("click", async () => {
   }
 });
 
-el("remove-course-btn").addEventListener("click", async () => {
-  if (!confirm(`Remover "${state.currentCourse.name}" da biblioteca? Os arquivos não são apagados.`)) return;
-  await api(`/api/courses/${state.currentCourseId}`, { method: "DELETE" });
-  stopPlayer();
-  await loadLibrary();
+el("edit-course-btn").addEventListener("click", () => {
+  openCourseEditDialog(state.currentCourse);
+});
+
+el("remove-course-btn").addEventListener("click", () => {
+  deleteCourseFlow(state.currentCourse, { fromPlayerView: true });
+});
+
+function deleteCourseFlow(course, { fromPlayerView }) {
+  showConfirmDelete(
+    course.name,
+    async () => {
+      await api(`/api/courses/${course.id}`, { method: "DELETE" });
+      if (fromPlayerView) stopPlayer();
+      await loadLibrary();
+    },
+    async () => {
+      await api(`/api/courses/${course.id}/restore`, { method: "POST" });
+      await loadLibrary();
+    }
+  );
+}
+
+/* ───────────────── course edit (name / description / cover) ───────────────── */
+
+let courseEditTargetId = null;
+let courseEditCoverFile = null;
+
+function openCourseEditDialog(course) {
+  courseEditTargetId = course.id;
+  courseEditCoverFile = null;
+  el("course-edit-title").textContent = `Editar curso — ${course.name}`;
+  el("course-edit-name").value = course.name;
+  el("course-edit-description").value = course.description || "";
+  el("course-edit-error").classList.add("hidden");
+  el("course-edit-cover-input").value = "";
+  if (course.cover_url) {
+    el("course-edit-cover-preview").src = `${course.cover_url}?t=${Date.now()}`;
+    el("course-edit-cover-preview").classList.remove("hidden");
+    el("course-edit-cover-empty").classList.add("hidden");
+  } else {
+    el("course-edit-cover-preview").classList.add("hidden");
+    el("course-edit-cover-empty").classList.remove("hidden");
+  }
+  el("course-edit-dialog").classList.remove("hidden");
+}
+
+el("course-edit-cover-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  courseEditCoverFile = file;
+  const reader = new FileReader();
+  reader.onload = () => {
+    el("course-edit-cover-preview").src = reader.result;
+    el("course-edit-cover-preview").classList.remove("hidden");
+    el("course-edit-cover-empty").classList.add("hidden");
+  };
+  reader.readAsDataURL(file);
+});
+
+el("course-edit-cancel").addEventListener("click", () => {
+  el("course-edit-dialog").classList.add("hidden");
+});
+
+el("course-edit-save").addEventListener("click", async () => {
+  const name = el("course-edit-name").value.trim();
+  const description = el("course-edit-description").value.trim();
+  const errEl = el("course-edit-error");
+  errEl.classList.add("hidden");
+  if (!name) {
+    errEl.textContent = "Nome é obrigatório.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  try {
+    await api(`/api/courses/${courseEditTargetId}`, {
+      method: "PUT",
+      body: JSON.stringify({ name, description: description || null }),
+    });
+    if (courseEditCoverFile) {
+      const formData = new FormData();
+      formData.append("file", courseEditCoverFile);
+      const res = await fetch(`/api/courses/${courseEditTargetId}/cover`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || res.statusText);
+      }
+    }
+    el("course-edit-dialog").classList.add("hidden");
+    showToast("Curso atualizado.");
+
+    const courses = await api("/api/courses");
+    state.courses = courses;
+    if (!el("view-library").classList.contains("hidden")) {
+      renderCourseGrid();
+    } else if (state.currentCourseId === courseEditTargetId) {
+      state.currentCourse = courses.find((c) => c.id === courseEditTargetId);
+      renderCourseHeader();
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+  }
 });
 
 /* ───────────────── player ───────────────── */
@@ -497,21 +840,62 @@ async function loadNotes(videoId) {
     return;
   }
   for (const n of notes) {
-    const row = document.createElement("div");
-    row.className = "note-row";
+    list.appendChild(renderNoteRow(n, videoId));
+  }
+}
+
+function renderNoteRow(n, videoId) {
+  const row = document.createElement("div");
+  row.className = "note-row";
+  row.innerHTML = `
+    <button class="tag tag-accent">${n.time_label}</button>
+    <div class="note-row-text">${escapeHtml(n.text)}</div>
+    <div class="row-actions">
+      <i class="ph ph-pencil-simple" title="Editar"></i>
+      <i class="ph ph-trash" title="Excluir"></i>
+    </div>`;
+  row.querySelector(".tag").addEventListener("click", () => {
+    el("player-video").currentTime = n.time_seconds;
+  });
+  row.querySelector(".ph-pencil-simple").addEventListener("click", () => {
     row.innerHTML = `
       <button class="tag tag-accent">${n.time_label}</button>
-      <div class="note-row-text">${escapeHtml(n.text)}</div>
-      <i class="ph ph-trash"></i>`;
+      <div class="inline-edit-row">
+        <textarea class="input note-edit-textarea" style="min-height:60px;">${escapeHtml(n.text)}</textarea>
+      </div>
+      <div class="row-actions">
+        <i class="ph ph-check" title="Salvar"></i>
+        <i class="ph ph-x" title="Cancelar"></i>
+      </div>`;
     row.querySelector(".tag").addEventListener("click", () => {
       el("player-video").currentTime = n.time_seconds;
     });
-    row.querySelector(".ph-trash").addEventListener("click", async () => {
-      await api(`/api/notes/${n.id}`, { method: "DELETE" });
-      loadNotes(videoId);
+    row.querySelector(".ph-check").addEventListener("click", async () => {
+      const newText = row.querySelector(".note-edit-textarea").value.trim();
+      if (!newText) return;
+      try {
+        await api(`/api/notes/${n.id}`, { method: "PUT", body: JSON.stringify({ text: newText }) });
+        loadNotes(videoId);
+      } catch (e) {
+        showToast(e.message);
+      }
     });
-    list.appendChild(row);
-  }
+    row.querySelector(".ph-x").addEventListener("click", () => loadNotes(videoId));
+  });
+  row.querySelector(".row-actions .ph-trash").addEventListener("click", () => {
+    showConfirmDelete(
+      `anotação em ${n.time_label}`,
+      async () => {
+        await api(`/api/notes/${n.id}`, { method: "DELETE" });
+        loadNotes(videoId);
+      },
+      async () => {
+        await api(`/api/notes/${n.id}/restore`, { method: "POST" });
+        loadNotes(videoId);
+      }
+    );
+  });
+  return row;
 }
 
 el("add-note-btn").addEventListener("click", async () => {
@@ -577,20 +961,65 @@ function renderVideoMaterials(materials) {
     return;
   }
   for (const m of materials) {
-    const row = document.createElement("div");
-    row.className = "material-row";
-    row.innerHTML = `
-      <i class="${materialIconClass(m.file_name, m.mime_type)}"></i>
-      <div class="material-row-name">${escapeHtml(m.file_name)}</div>
-      <span class="text-muted" style="font-size:11px;">${formatBytes(m.size_bytes)}</span>
-      <a href="/api/materials/${m.id}/download" title="Baixar"><i class="ph ph-download-simple"></i></a>
-      <i class="ph ph-trash" title="Remover"></i>`;
-    row.querySelector(".ph-trash").addEventListener("click", async () => {
-      await api(`/api/materials/${m.id}`, { method: "DELETE" });
-      loadMaterials();
-    });
-    list.appendChild(row);
+    list.appendChild(renderVideoMaterialRow(m));
   }
+}
+
+function renderVideoMaterialRow(m) {
+  const row = document.createElement("div");
+  row.className = "material-row";
+  row.innerHTML = `
+    <i class="${materialIconClass(m.file_name, m.mime_type)}"></i>
+    <div class="material-row-name">${escapeHtml(m.file_name)}</div>
+    <span class="text-muted" style="font-size:11px;">${formatBytes(m.size_bytes)}</span>
+    <a href="/api/materials/${m.id}/download" title="Baixar"><i class="ph ph-download-simple"></i></a>
+    <i class="ph ph-pencil-simple" title="Renomear"></i>
+    <i class="ph ph-trash" title="Remover"></i>`;
+  row.querySelector(".ph-pencil-simple").addEventListener("click", () => {
+    const nameEl = row.querySelector(".material-row-name");
+    nameEl.outerHTML = `<input class="input material-rename-input" style="flex:1;min-height:28px;padding:2px 6px;" value="${escapeHtml(m.file_name)}" />`;
+    const input = row.querySelector(".material-rename-input");
+    input.focus();
+    input.select();
+    let saved = false;
+    const save = async () => {
+      if (saved) return;
+      saved = true;
+      const newName = input.value.trim();
+      if (!newName || newName === m.file_name) {
+        loadMaterials();
+        return;
+      }
+      try {
+        await api(`/api/materials/${m.id}`, { method: "PUT", body: JSON.stringify({ file_name: newName }) });
+        loadMaterials();
+      } catch (e) {
+        showToast(e.message);
+      }
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") save();
+      if (e.key === "Escape") {
+        saved = true;
+        loadMaterials();
+      }
+    });
+    input.addEventListener("blur", save);
+  });
+  row.querySelector(".ph-trash").addEventListener("click", () => {
+    showConfirmDelete(
+      m.file_name,
+      async () => {
+        await api(`/api/materials/${m.id}`, { method: "DELETE" });
+        loadMaterials();
+      },
+      async () => {
+        await api(`/api/materials/${m.id}/restore`, { method: "POST" });
+        loadMaterials();
+      }
+    );
+  });
+  return row;
 }
 
 function renderCourseMaterials(materials) {

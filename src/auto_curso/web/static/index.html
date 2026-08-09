@@ -44,10 +44,14 @@
           <button class="btn btn-ghost filter-btn" data-filter="pending">Pendentes</button>
           <button class="btn btn-ghost filter-btn" data-filter="completed">Concluídos</button>
         </div>
+        <input class="input" id="video-search-input" type="text" placeholder="Buscar aula..." />
         <button class="btn btn-secondary btn-block" id="refresh-course-btn"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+        <button class="btn btn-secondary btn-block" id="edit-course-btn"><i class="ph ph-pencil-simple"></i> Editar curso</button>
+        <button class="btn btn-secondary btn-block" id="add-video-btn"><i class="ph ph-plus"></i> Anexar vídeo avulso</button>
         <button class="btn btn-secondary btn-block" id="remove-course-btn"><i class="ph ph-trash"></i> Remover curso</button>
       </div>
       <div class="sidebar-list" id="sidebar-list"></div>
+      <div class="sidebar-pagination" id="sidebar-pagination"></div>
       <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
     </aside>
 
@@ -133,6 +137,90 @@
     <div class="dialog-actions">
       <button class="btn btn-secondary" id="browse-cancel-btn">Cancelar</button>
       <button class="btn btn-primary" id="browse-select-btn">Selecionar esta pasta</button>
+    </div>
+  </div>
+</div>
+
+<!-- COURSE EDIT DIALOG -->
+<div id="course-edit-dialog" class="dialog-backdrop hidden">
+  <div class="dialog">
+    <div class="dialog-title" id="course-edit-title">Editar curso</div>
+    <div class="field">
+      <label for="course-edit-name">Nome</label>
+      <input class="input" id="course-edit-name" type="text" maxlength="200" />
+    </div>
+    <div class="field">
+      <label for="course-edit-description">Descrição</label>
+      <textarea class="input" id="course-edit-description" style="min-height:80px;resize:vertical;"></textarea>
+    </div>
+    <div class="field">
+      <label>Capa</label>
+      <div class="cover-edit-row">
+        <img id="course-edit-cover-preview" class="cover-preview hidden" />
+        <div id="course-edit-cover-empty" class="cover-preview cover-preview-empty"><i class="ph ph-image"></i></div>
+        <label class="btn btn-secondary" for="course-edit-cover-input"><i class="ph ph-upload-simple"></i> Trocar imagem</label>
+        <input type="file" id="course-edit-cover-input" accept=".png,.jpg,.jpeg,.gif,.webp" class="hidden" />
+      </div>
+    </div>
+    <div class="dialog-error hidden" id="course-edit-error"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="course-edit-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="course-edit-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD VIDEO (AVULSO) DIALOG -->
+<div id="video-add-dialog" class="dialog-backdrop hidden">
+  <div class="dialog">
+    <div class="dialog-title">Anexar vídeo avulso</div>
+    <div class="dialog-body">Envie um arquivo de vídeo para adicionar à playlist deste curso, fora da pasta escaneada.</div>
+    <div class="field">
+      <label for="video-add-file">Arquivo de vídeo</label>
+      <input class="input" id="video-add-file" type="file" accept=".mp4,.mkv,.avi,.webm,.mov,.wmv,.m4v,.flv,.mpeg,.mpg,.3gp,.ogv" />
+    </div>
+    <div class="dialog-error hidden" id="video-add-error"></div>
+    <div id="video-add-progress" class="hidden text-muted" style="font-size:12px;">Enviando...</div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="video-add-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="video-add-save">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT VIDEO DIALOG -->
+<div id="video-edit-dialog" class="dialog-backdrop hidden">
+  <div class="dialog">
+    <div class="dialog-title">Editar aula</div>
+    <div class="field">
+      <label for="video-edit-title">Título de exibição</label>
+      <input class="input" id="video-edit-title" type="text" maxlength="300" placeholder="Nome do arquivo original" />
+    </div>
+    <div class="field">
+      <label for="video-edit-order">Ordem na playlist</label>
+      <input class="input" id="video-edit-order" type="number" min="0" />
+    </div>
+    <div class="dialog-error hidden" id="video-edit-error"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="video-edit-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="video-edit-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHARED DANGER CONFIRM-DELETE DIALOG -->
+<div id="confirm-delete-dialog" class="dialog-backdrop danger-backdrop hidden">
+  <div class="dialog dialog-danger">
+    <div class="danger-icon">⚠️</div>
+    <div class="dialog-title" style="text-align:center;">Tem certeza que deseja excluir?</div>
+    <div class="dialog-body" id="confirm-delete-message" style="text-align:center;"></div>
+    <label class="confirm-checkbox-row">
+      <input type="checkbox" id="confirm-delete-checkbox" />
+      Entendo que essa ação é irreversível
+    </label>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="confirm-delete-cancel">Cancelar</button>
+      <button class="btn btn-danger" id="confirm-delete-confirm" disabled>Sim, excluir permanentemente</button>
     </div>
   </div>
 </div>

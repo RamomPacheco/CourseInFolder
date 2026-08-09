@@ -11,6 +11,8 @@ class Course:
     name: str
     folder_path: str
     added_at: datetime
+    description: str | None = None
+    cover_stored_name: str | None = None
 
 
 @dataclass

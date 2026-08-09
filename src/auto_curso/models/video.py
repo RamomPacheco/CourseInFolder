@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
+from auto_curso.constants import get_manual_video_dir
 from auto_curso.models.progress import PlaybackProgress
 
 
@@ -16,6 +17,13 @@ class Video:
     sort_order: int
     file_size_bytes: int
     duration_seconds: float | None = None
+    display_title: str | None = None
+    is_manual: bool = False
+    manual_stored_name: str | None = None
+
+    @property
+    def display_name(self) -> str:
+        return self.display_title or self.file_name
 
 
 @dataclass
@@ -33,6 +41,8 @@ class VideoWithProgress:
 
     @property
     def full_path(self) -> str:
+        if self.video.is_manual:
+            return str(get_manual_video_dir(self.video.course_id, self.video.id) / self.video.manual_stored_name)
         return str(Path(self.course_folder_path) / self.video.relative_path)
 
     @property

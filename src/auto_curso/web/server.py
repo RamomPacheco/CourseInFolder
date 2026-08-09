@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import re
+import shutil
 import threading
 import webbrowser
+from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from auto_curso.constants import MAX_UPLOAD_SIZE_BYTES
+from auto_curso.constants import (
+    MAX_COVER_SIZE_BYTES,
+    MAX_UPLOAD_SIZE_BYTES,
+    MAX_VIDEO_UPLOAD_SIZE_BYTES,
+    PURGE_INTERVAL_SECONDS,
+    VIDEO_EXTENSIONS,
+    get_course_cover_dir,
+    get_manual_video_dir,
+)
 from auto_curso.db.schema import initialize_database
 from auto_curso.helpers import format_seconds
 from auto_curso.repositories.course_repository import CourseRepository
@@ -26,8 +37,6 @@ PORT = 8765
 CHUNK_SIZE = 1024 * 1024
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Video Learning Tracker")
-
 course_repo = CourseRepository()
 progress_repo = ProgressRepository()
 notes_repo = NotesRepository()
@@ -37,8 +46,35 @@ course_service = CourseService(
 )
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize_database()
+    stop_event = asyncio.Event()
+
+    async def purge_loop() -> None:
+        while not stop_event.is_set():
+            await asyncio.to_thread(course_service.purge_expired_soft_deletes)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=PURGE_INTERVAL_SECONDS)
+            except asyncio.TimeoutError:
+                pass
+
+    task = asyncio.create_task(purge_loop())
+    yield
+    stop_event.set()
+    task.cancel()
+
+
+app = FastAPI(title="Video Learning Tracker", lifespan=lifespan)
+
+
 class AddCourseBody(BaseModel):
     folder_path: str
+
+
+class UpdateCourseBody(BaseModel):
+    name: str
+    description: str | None = None
 
 
 class ProgressBody(BaseModel):
@@ -50,13 +86,26 @@ class CompletedBody(BaseModel):
     completed: bool
 
 
+class UpdateVideoBody(BaseModel):
+    display_title: str | None = None
+    sort_order: int | None = None
+
+
 class NoteBody(BaseModel):
     time_seconds: float
     text: str
 
 
+class UpdateNoteBody(BaseModel):
+    text: str
+
+
 class CourseNoteBody(BaseModel):
     text: str
+
+
+class RenameMaterialBody(BaseModel):
+    file_name: str
 
 
 def _course_summary_json(summary) -> dict:
@@ -65,6 +114,8 @@ def _course_summary_json(summary) -> dict:
         "name": summary.course.name,
         "folder_path": summary.course.folder_path,
         "added_at": summary.course.added_at.isoformat(),
+        "description": summary.course.description,
+        "cover_url": f"/api/courses/{summary.course.id}/cover" if summary.course.cover_stored_name else None,
         "total_videos": summary.total_videos,
         "completed_videos": summary.completed_videos,
         "progress_percent": summary.progress_percent,
@@ -80,9 +131,12 @@ def _video_json(vwp, favorites: set[UUID] | None = None) -> dict:
     return {
         "id": str(vwp.video.id),
         "file_name": vwp.video.file_name,
+        "display_title": vwp.video.display_title,
+        "display_name": vwp.video.display_name,
         "relative_path": vwp.video.relative_path,
-        "module": _module_of(vwp.video.relative_path),
+        "module": _module_of(vwp.video.relative_path) if not vwp.video.is_manual else None,
         "sort_order": vwp.video.sort_order,
+        "is_manual": vwp.video.is_manual,
         "duration_seconds": vwp.video.duration_seconds,
         "duration_label": format_seconds(vwp.video.duration_seconds or 0),
         "position_seconds": vwp.progress.position_seconds if vwp.progress else 0.0,
@@ -106,6 +160,40 @@ def add_course(body: AddCourseBody) -> dict:
     return _course_summary_json(summary)
 
 
+@app.put("/api/courses/{course_id}")
+def update_course(course_id: UUID, body: UpdateCourseBody) -> dict:
+    try:
+        summary = course_service.update_course(course_id, body.name, body.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _course_summary_json(summary)
+
+
+@app.post("/api/courses/{course_id}/cover")
+async def upload_course_cover(course_id: UUID, file: UploadFile = File(...)) -> dict:
+    data = await file.read(MAX_COVER_SIZE_BYTES + 1)
+    if len(data) > MAX_COVER_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Imagem muito grande (máximo 10 MB).")
+    try:
+        course_service.set_course_cover(
+            course_id, file.filename or "capa", data, file.content_type or "image/*"
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.get("/api/courses/{course_id}/cover")
+def get_course_cover(course_id: UUID):
+    course = course_repo.get_by_id(course_id)
+    if course is None or not course.cover_stored_name:
+        raise HTTPException(status_code=404, detail="Sem capa.")
+    path = get_course_cover_dir(course_id) / course.cover_stored_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Sem capa.")
+    return FileResponse(path)
+
+
 @app.post("/api/courses/{course_id}/refresh")
 def refresh_course(course_id: UUID) -> dict:
     try:
@@ -117,7 +205,16 @@ def refresh_course(course_id: UUID) -> dict:
 
 @app.delete("/api/courses/{course_id}")
 def remove_course(course_id: UUID) -> dict:
-    course_service.remove_course(course_id)
+    try:
+        course_service.soft_delete_course(course_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.post("/api/courses/{course_id}/restore")
+def restore_course(course_id: UUID) -> dict:
+    course_service.restore_course(course_id)
     return {"ok": True}
 
 
@@ -129,6 +226,65 @@ def list_videos(course_id: UUID) -> list[dict]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     favorites = course_service.get_favorites(course_id)
     return [_video_json(v, favorites) for v in videos]
+
+
+@app.post("/api/courses/{course_id}/videos")
+async def add_manual_video(course_id: UUID, file: UploadFile = File(...)) -> dict:
+    extension = Path(file.filename or "").suffix.lower()
+    if extension not in VIDEO_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, detail=f"Tipo de vídeo não suportado ({extension or 'sem extensão'})."
+        )
+
+    video_id = uuid4()
+    stored_name = f"video{extension}"
+    target_dir = get_manual_video_dir(course_id, video_id)
+    target_path = target_dir / stored_name
+    size = 0
+    try:
+        with open(target_path, "wb") as out:
+            while chunk := await file.read(CHUNK_SIZE):
+                size += len(chunk)
+                if size > MAX_VIDEO_UPLOAD_SIZE_BYTES:
+                    raise HTTPException(status_code=400, detail="Vídeo muito grande (máximo 4 GB).")
+                out.write(chunk)
+    except HTTPException:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+
+    try:
+        video = course_service.add_manual_video(
+            course_id, video_id, file.filename or "video", stored_name, size
+        )
+    except ValueError as exc:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"id": str(video.id), "file_name": video.file_name, "display_name": video.display_name}
+
+
+@app.put("/api/videos/{video_id}")
+def update_video(video_id: UUID, body: UpdateVideoBody) -> dict:
+    try:
+        video = course_service.update_video(video_id, body.display_title, body.sort_order)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"id": str(video.id), "display_title": video.display_title, "sort_order": video.sort_order}
+
+
+@app.delete("/api/videos/{video_id}")
+def delete_video(video_id: UUID) -> dict:
+    try:
+        course_service.soft_delete_video(video_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.post("/api/videos/{video_id}/restore")
+def restore_video(video_id: UUID) -> dict:
+    course_service.restore_video(video_id)
+    return {"ok": True}
 
 
 @app.get("/api/continue-watching")
@@ -173,11 +329,15 @@ def stream_video(video_id: UUID, request: Request):
     video = course_repo.get_video(video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Vídeo não encontrado.")
-    course = course_repo.get_by_id(video.course_id)
-    if course is None:
-        raise HTTPException(status_code=404, detail="Curso não encontrado.")
 
-    full_path = Path(course.folder_path) / video.relative_path
+    if video.is_manual:
+        full_path = get_manual_video_dir(video.course_id, video.id) / video.manual_stored_name
+    else:
+        course = course_repo.get_by_id(video.course_id)
+        if course is None:
+            raise HTTPException(status_code=404, detail="Curso não encontrado.")
+        full_path = Path(course.folder_path) / video.relative_path
+
     if not full_path.is_file():
         raise HTTPException(status_code=404, detail="Arquivo de vídeo não encontrado.")
 
@@ -248,9 +408,27 @@ def add_note(video_id: UUID, body: NoteBody) -> dict:
     }
 
 
+@app.put("/api/notes/{note_id}")
+def update_note(note_id: UUID, body: UpdateNoteBody) -> dict:
+    try:
+        course_service.update_video_note(note_id, body.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
 @app.delete("/api/notes/{note_id}")
 def delete_note(note_id: UUID) -> dict:
-    course_service.delete_video_note(note_id)
+    try:
+        course_service.soft_delete_video_note(note_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.post("/api/notes/{note_id}/restore")
+def restore_note(note_id: UUID) -> dict:
+    course_service.restore_video_note(note_id)
     return {"ok": True}
 
 
@@ -321,9 +499,27 @@ async def upload_video_material(video_id: UUID, file: UploadFile = File(...)) ->
     return _uploaded_material_json(material)
 
 
+@app.put("/api/materials/{material_id}")
+def rename_material(material_id: UUID, body: RenameMaterialBody) -> dict:
+    try:
+        course_service.rename_video_material(material_id, body.file_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
 @app.delete("/api/materials/{material_id}")
 def delete_video_material(material_id: UUID) -> dict:
-    course_service.delete_video_material(material_id)
+    try:
+        course_service.soft_delete_video_material(material_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.post("/api/materials/{material_id}/restore")
+def restore_video_material(material_id: UUID) -> dict:
+    course_service.restore_video_material(material_id)
     return {"ok": True}
 
 

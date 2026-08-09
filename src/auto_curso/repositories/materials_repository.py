@@ -6,26 +6,23 @@ from uuid import UUID, uuid4
 from auto_curso.db.connection import get_connection
 from auto_curso.models.material import UploadedMaterial
 
+_MATERIAL_COLUMNS = "Id, VideoId, FileName, StoredName, MimeType, SizeBytes, UploadedAt"
+
 
 class MaterialsRepository:
     def list_for_video(self, video_id: UUID) -> list[UploadedMaterial]:
         with get_connection() as conn:
             rows = conn.execute(
-                """
-                SELECT Id, VideoId, FileName, StoredName, MimeType, SizeBytes, UploadedAt
-                FROM VideoMaterials WHERE VideoId = ? ORDER BY UploadedAt
-                """,
+                f"SELECT {_MATERIAL_COLUMNS} FROM VideoMaterials WHERE VideoId = ? AND DeletedAt IS NULL ORDER BY UploadedAt",
                 (str(video_id),),
             ).fetchall()
         return [_read_material(r) for r in rows]
 
-    def get(self, material_id: UUID) -> UploadedMaterial | None:
+    def get(self, material_id: UUID, include_deleted: bool = False) -> UploadedMaterial | None:
+        clause = "" if include_deleted else "AND DeletedAt IS NULL"
         with get_connection() as conn:
             row = conn.execute(
-                """
-                SELECT Id, VideoId, FileName, StoredName, MimeType, SizeBytes, UploadedAt
-                FROM VideoMaterials WHERE Id = ?
-                """,
+                f"SELECT {_MATERIAL_COLUMNS} FROM VideoMaterials WHERE Id = ? {clause}",
                 (str(material_id),),
             ).fetchone()
         return _read_material(row) if row else None
@@ -61,7 +58,32 @@ class MaterialsRepository:
             )
         return material
 
-    def delete(self, material_id: UUID) -> None:
+    def rename(self, material_id: UUID, file_name: str) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE VideoMaterials SET FileName = ? WHERE Id = ?", (file_name, str(material_id))
+            )
+
+    def soft_delete(self, material_id: UUID) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE VideoMaterials SET DeletedAt = ? WHERE Id = ?",
+                (datetime.now(timezone.utc).isoformat(), str(material_id)),
+            )
+
+    def restore(self, material_id: UUID) -> None:
+        with get_connection() as conn:
+            conn.execute("UPDATE VideoMaterials SET DeletedAt = NULL WHERE Id = ?", (str(material_id),))
+
+    def get_expired_soft_deleted(self, cutoff_iso: str) -> list[UploadedMaterial]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"SELECT {_MATERIAL_COLUMNS} FROM VideoMaterials WHERE DeletedAt IS NOT NULL AND DeletedAt < ?",
+                (cutoff_iso,),
+            ).fetchall()
+        return [_read_material(r) for r in rows]
+
+    def hard_delete(self, material_id: UUID) -> None:
         with get_connection() as conn:
             conn.execute("DELETE FROM VideoMaterials WHERE Id = ?", (str(material_id),))
 
