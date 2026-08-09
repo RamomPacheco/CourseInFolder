@@ -48,6 +48,7 @@
         <button class="btn btn-secondary btn-block" id="remove-course-btn"><i class="ph ph-trash"></i> Remover curso</button>
       </div>
       <div class="sidebar-list" id="sidebar-list"></div>
+      <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
     </aside>
 
     <div class="player-main" id="player-main">
@@ -62,7 +63,9 @@
 
       <div class="player-controls">
         <div class="controls-row">
+          <button class="btn-icon" id="prev-video-btn" title="Aula anterior"><i class="ph ph-skip-back"></i></button>
           <button class="btn-icon" id="play-btn"><i class="ph-fill ph-play" id="play-icon"></i></button>
+          <button class="btn-icon" id="next-video-btn" title="Próxima aula"><i class="ph ph-skip-forward"></i></button>
           <button class="btn-icon" id="skip-back-btn"><i class="ph ph-arrow-counter-clockwise"></i></button>
           <button class="btn-icon" id="skip-fwd-btn"><i class="ph ph-arrow-clockwise"></i></button>
           <span class="time-label" id="time-label">--:-- / --:--</span>

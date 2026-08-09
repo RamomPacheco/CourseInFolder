@@ -179,14 +179,18 @@ async function loadVideos() {
   renderSidebarList();
 }
 
-function renderSidebarList() {
-  const list = el("sidebar-list");
-  list.innerHTML = "";
-  const filtered = state.videos.filter((v) => {
+function getFilteredVideos() {
+  return state.videos.filter((v) => {
     if (state.filter === "pending") return !v.is_completed;
     if (state.filter === "completed") return v.is_completed;
     return true;
   });
+}
+
+function renderSidebarList() {
+  const list = el("sidebar-list");
+  list.innerHTML = "";
+  const filtered = getFilteredVideos();
 
   const groups = new Map();
   for (const v of filtered) {
@@ -197,6 +201,7 @@ function renderSidebarList() {
 
   if (filtered.length === 0) {
     list.innerHTML = `<div class="empty-state">Nenhuma aula nesta lista.</div>`;
+    updateNavButtons();
     return;
   }
 
@@ -211,6 +216,15 @@ function renderSidebarList() {
       list.appendChild(renderSidebarItem(v));
     }
   }
+
+  updateNavButtons();
+}
+
+function updateNavButtons() {
+  const list = getFilteredVideos();
+  const idx = list.findIndex((v) => v.id === state.currentVideoId);
+  el("prev-video-btn").disabled = idx <= 0;
+  el("next-video-btn").disabled = idx === -1 || idx >= list.length - 1;
 }
 
 function renderSidebarItem(v) {
@@ -291,6 +305,8 @@ function stopPlayer() {
   el("time-label").textContent = "--:-- / --:--";
   el("seek-range").value = 0;
   el("player-surface").classList.remove("is-mini");
+  el("prev-video-btn").disabled = true;
+  el("next-video-btn").disabled = true;
 }
 
 /* Sticky player + floating mini-player: the surface sticks to the top of
@@ -399,6 +415,16 @@ el("play-btn").addEventListener("click", () => {
   const videoEl = el("player-video");
   if (videoEl.paused) videoEl.play().catch(() => {});
   else videoEl.pause();
+});
+el("prev-video-btn").addEventListener("click", () => {
+  const list = getFilteredVideos();
+  const idx = list.findIndex((v) => v.id === state.currentVideoId);
+  if (idx > 0) loadVideoIntoPlayer(list[idx - 1]);
+});
+el("next-video-btn").addEventListener("click", () => {
+  const list = getFilteredVideos();
+  const idx = list.findIndex((v) => v.id === state.currentVideoId);
+  if (idx !== -1 && idx < list.length - 1) loadVideoIntoPlayer(list[idx + 1]);
 });
 el("skip-back-btn").addEventListener("click", () => {
   const videoEl = el("player-video");
@@ -664,5 +690,41 @@ el("browse-select-btn").addEventListener("click", async () => {
 });
 
 setupMiniPlayerObserver();
+
+/* ───────────────── resizable sidebar ───────────────── */
+
+(() => {
+  const handle = el("sidebar-resize-handle");
+  const layout = document.querySelector(".player-layout");
+  const MIN_WIDTH = 220;
+  const MAX_WIDTH = 560;
+  let dragging = false;
+
+  const setWidth = (px) => {
+    const clamped = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, px));
+    document.documentElement.style.setProperty("--sidebar-width", `${clamped}px`);
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    setWidth(e.clientX - layout.getBoundingClientRect().left);
+  };
+  const stopDragging = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove("dragging");
+    layout.classList.remove("resizing");
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", stopDragging);
+  };
+
+  handle.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    handle.classList.add("dragging");
+    layout.classList.add("resizing");
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", stopDragging);
+  });
+})();
 
 loadLibrary().catch((e) => showToast(e.message));
