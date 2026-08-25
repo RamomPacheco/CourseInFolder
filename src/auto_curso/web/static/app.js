@@ -452,8 +452,12 @@ function deleteVideoFlow(v) {
 function updateNavButtons() {
   const list = getFilteredVideos();
   const idx = list.findIndex((v) => v.id === state.currentVideoId);
-  el("prev-video-btn").disabled = idx <= 0;
-  el("next-video-btn").disabled = idx === -1 || idx >= list.length - 1;
+  const noPrev = idx <= 0;
+  const noNext = idx === -1 || idx >= list.length - 1;
+  el("prev-video-btn").disabled = noPrev;
+  el("next-video-btn").disabled = noNext;
+  el("fs-prev-btn").disabled = noPrev;
+  el("fs-next-btn").disabled = noNext;
 }
 
 function renderSidebarItem(v) {
@@ -650,6 +654,27 @@ function stopPlayer() {
   el("player-surface").classList.remove("is-mini");
   el("prev-video-btn").disabled = true;
   el("next-video-btn").disabled = true;
+  el("fs-prev-btn").disabled = true;
+  el("fs-next-btn").disabled = true;
+  syncPlayIcon(video);
+}
+
+/* Icon is always derived from the real video state (videoEl.paused) instead
+   of being set optimistically — browsers don't reliably fire a matching
+   play/pause event when a play() request gets interrupted (AbortError), which
+   used to leave the icon showing the wrong symbol. */
+function syncPlayIcon(videoEl) {
+  const cls = videoEl.paused ? "ph-fill ph-play" : "ph-fill ph-pause";
+  el("play-icon").className = cls;
+  el("fs-play-icon").className = cls;
+}
+
+function togglePlayback(videoEl) {
+  if (videoEl.paused) {
+    videoEl.play().catch(() => syncPlayIcon(videoEl));
+  } else {
+    videoEl.pause();
+  }
 }
 
 /* Sticky player + floating mini-player: the surface sticks to the top of
@@ -694,24 +719,26 @@ function loadVideoIntoPlayer(v) {
 
   videoEl.src = `/api/videos/${v.id}/stream`;
   videoEl.playbackRate = parseFloat(el("speed-select").value);
+  syncPlayIcon(videoEl);
   videoEl.onloadedmetadata = () => {
     if (!v.is_completed && v.position_seconds > 0) {
       videoEl.currentTime = v.position_seconds;
     }
     el("seek-range").max = videoEl.duration || 0;
+    el("fs-seek-range").max = videoEl.duration || 0;
   };
   videoEl.ontimeupdate = () => {
+    const timeText = `${formatSeconds(videoEl.currentTime)} / ${formatSeconds(videoEl.duration)}`;
     el("seek-range").value = videoEl.currentTime;
-    el("time-label").textContent = `${formatSeconds(videoEl.currentTime)} / ${formatSeconds(videoEl.duration)}`;
+    el("time-label").textContent = timeText;
     el("note-time-label").textContent = `em ${formatSeconds(videoEl.currentTime)}`;
+    el("fs-seek-range").value = videoEl.currentTime;
+    el("fs-time-label").textContent = timeText;
   };
-  videoEl.onclick = () => {
-    if (videoEl.paused) videoEl.play().catch(() => {});
-    else videoEl.pause();
-  };
-  videoEl.onplay = () => el("play-icon").className = "ph-fill ph-pause";
-  videoEl.onpause = () => { el("play-icon").className = "ph-fill ph-play"; saveProgress(videoEl); };
-  videoEl.onended = () => saveProgress(videoEl);
+  videoEl.onclick = () => togglePlayback(videoEl);
+  videoEl.onplay = () => syncPlayIcon(videoEl);
+  videoEl.onpause = () => { syncPlayIcon(videoEl); saveProgress(videoEl); };
+  videoEl.onended = () => { syncPlayIcon(videoEl); saveProgress(videoEl); };
 
   state.saveTimer = setInterval(() => {
     if (!videoEl.paused) saveProgress(videoEl);
@@ -754,21 +781,22 @@ function updateCompleteButton(isCompleted) {
     : '<i class="ph ph-check-circle"></i> Marcar como concluída';
 }
 
-el("play-btn").addEventListener("click", () => {
-  const videoEl = el("player-video");
-  if (videoEl.paused) videoEl.play().catch(() => {});
-  else videoEl.pause();
-});
-el("prev-video-btn").addEventListener("click", () => {
+function goToPrevVideo() {
   const list = getFilteredVideos();
   const idx = list.findIndex((v) => v.id === state.currentVideoId);
   if (idx > 0) loadVideoIntoPlayer(list[idx - 1]);
-});
-el("next-video-btn").addEventListener("click", () => {
+}
+function goToNextVideo() {
   const list = getFilteredVideos();
   const idx = list.findIndex((v) => v.id === state.currentVideoId);
   if (idx !== -1 && idx < list.length - 1) loadVideoIntoPlayer(list[idx + 1]);
+}
+
+el("play-btn").addEventListener("click", () => {
+  togglePlayback(el("player-video"));
 });
+el("prev-video-btn").addEventListener("click", goToPrevVideo);
+el("next-video-btn").addEventListener("click", goToNextVideo);
 el("skip-back-btn").addEventListener("click", () => {
   const videoEl = el("player-video");
   videoEl.currentTime = Math.max(0, videoEl.currentTime - 10);
@@ -787,6 +815,89 @@ el("fullscreen-btn").addEventListener("click", () => {
   const surface = el("player-surface");
   if (!document.fullscreenElement) surface.requestFullscreen?.().catch(() => {});
   else document.exitFullscreen?.();
+});
+
+/* ───────── fullscreen overlay controls (auto-hide on inactivity) ───────── */
+const FS_IDLE_DELAY_MS = 2500;
+let fsIdleTimer = null;
+let fsNotePopoverOpen = false;
+
+function isPlayerFullscreen() {
+  return document.fullscreenElement === el("player-surface");
+}
+
+function resetFsIdleTimer() {
+  const surface = el("player-surface");
+  surface.classList.remove("fs-idle");
+  clearTimeout(fsIdleTimer);
+  if (!isPlayerFullscreen() || fsNotePopoverOpen) return;
+  fsIdleTimer = setTimeout(() => {
+    if (isPlayerFullscreen() && !fsNotePopoverOpen) surface.classList.add("fs-idle");
+  }, FS_IDLE_DELAY_MS);
+}
+
+function openFsNotePopover() {
+  const videoEl = el("player-video");
+  if (!state.currentVideoId) return;
+  fsNotePopoverOpen = true;
+  el("fs-note-time").dataset.seconds = videoEl.currentTime;
+  el("fs-note-time").textContent = formatSeconds(videoEl.currentTime);
+  el("fs-note-input").value = "";
+  el("fs-note-popover").classList.remove("hidden");
+  resetFsIdleTimer();
+  el("fs-note-input").focus();
+}
+
+function closeFsNotePopover() {
+  fsNotePopoverOpen = false;
+  el("fs-note-popover").classList.add("hidden");
+  resetFsIdleTimer();
+}
+
+el("fs-play-btn").addEventListener("click", () => togglePlayback(el("player-video")));
+el("fs-prev-btn").addEventListener("click", goToPrevVideo);
+el("fs-next-btn").addEventListener("click", goToNextVideo);
+el("fs-seek-range").addEventListener("input", (e) => {
+  el("player-video").currentTime = parseFloat(e.target.value);
+});
+el("fs-speed-select").addEventListener("change", (e) => {
+  const rate = parseFloat(e.target.value);
+  el("player-video").playbackRate = rate;
+  el("speed-select").value = e.target.value;
+});
+el("speed-select").addEventListener("change", (e) => {
+  el("fs-speed-select").value = e.target.value;
+});
+el("fs-exit-btn").addEventListener("click", () => document.exitFullscreen?.());
+
+el("fs-note-btn").addEventListener("click", () => {
+  if (fsNotePopoverOpen) closeFsNotePopover();
+  else openFsNotePopover();
+});
+el("fs-note-save-btn").addEventListener("click", async () => {
+  const text = el("fs-note-input").value.trim();
+  const seconds = parseFloat(el("fs-note-time").dataset.seconds || "0");
+  await saveNoteAt(seconds, text);
+  closeFsNotePopover();
+});
+el("fs-note-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el("fs-note-save-btn").click();
+  else if (e.key === "Escape") closeFsNotePopover();
+});
+
+document.addEventListener("fullscreenchange", () => {
+  if (isPlayerFullscreen()) {
+    resetFsIdleTimer();
+  } else {
+    clearTimeout(fsIdleTimer);
+    el("player-surface").classList.remove("fs-idle");
+    closeFsNotePopover();
+  }
+});
+["mousemove", "mousedown", "keydown", "touchstart"].forEach((evt) => {
+  el("player-surface").addEventListener(evt, () => {
+    if (isPlayerFullscreen()) resetFsIdleTimer();
+  });
 });
 el("complete-btn").addEventListener("click", async () => {
   if (!state.currentVideoId) return;
@@ -898,16 +1009,20 @@ function renderNoteRow(n, videoId) {
   return row;
 }
 
-el("add-note-btn").addEventListener("click", async () => {
-  const input = el("note-input");
-  const text = input.value.trim();
+async function saveNoteAt(timeSeconds, text) {
   if (!text || !state.currentVideoId) return;
   await api(`/api/videos/${state.currentVideoId}/notes`, {
     method: "POST",
-    body: JSON.stringify({ time_seconds: el("player-video").currentTime, text }),
+    body: JSON.stringify({ time_seconds: timeSeconds, text }),
   });
-  input.value = "";
   loadNotes(state.currentVideoId);
+}
+
+el("add-note-btn").addEventListener("click", async () => {
+  const input = el("note-input");
+  const text = input.value.trim();
+  await saveNoteAt(el("player-video").currentTime, text);
+  input.value = "";
 });
 el("note-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") el("add-note-btn").click();

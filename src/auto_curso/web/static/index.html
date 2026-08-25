@@ -63,6 +63,35 @@
         <button class="mini-restore-btn" id="mini-restore-btn" title="Restaurar player">
           <i class="ph ph-arrows-in-simple"></i>
         </button>
+
+        <!-- Overlay controls shown only in native fullscreen (#player-surface:fullscreen),
+             auto-hidden after a few seconds of inactivity via the .fs-idle class. -->
+        <div class="fs-controls" id="fs-controls">
+          <div class="fs-controls-row">
+            <input type="range" id="fs-seek-range" class="seek-range" min="0" max="100" value="0" step="0.1" />
+          </div>
+          <div class="fs-controls-row">
+            <button class="btn-icon" id="fs-prev-btn" title="Aula anterior"><i class="ph ph-skip-back"></i></button>
+            <button class="btn-icon" id="fs-play-btn"><i class="ph-fill ph-play" id="fs-play-icon"></i></button>
+            <button class="btn-icon" id="fs-next-btn" title="Próxima aula"><i class="ph ph-skip-forward"></i></button>
+            <span class="time-label" id="fs-time-label">--:-- / --:--</span>
+            <button class="btn-icon" id="fs-note-btn" title="Marcar tempo para anotação"><i class="ph ph-bookmark-simple"></i></button>
+            <select class="input speed-select" id="fs-speed-select" title="Velocidade">
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="1.75">1.75x</option>
+              <option value="2">2x</option>
+            </select>
+            <button class="btn-icon" id="fs-exit-btn" title="Sair da tela cheia"><i class="ph ph-corners-in"></i></button>
+          </div>
+          <div class="fs-note-popover hidden" id="fs-note-popover">
+            <span class="fs-note-time" id="fs-note-time">00:00</span>
+            <input class="input" id="fs-note-input" placeholder="Anotação neste momento..." />
+            <button class="btn-icon" id="fs-note-save-btn" title="Salvar"><i class="ph ph-check"></i></button>
+          </div>
+        </div>
       </div>
 
       <div class="player-controls">

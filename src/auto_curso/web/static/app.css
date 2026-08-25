@@ -135,6 +135,28 @@ i[class^="ph"] { line-height: 1; }
   .player-surface.is-mini { width: 200px; height: 112px; bottom: 12px; right: 12px; }
 }
 
+/* — fullscreen overlay controls — */
+.fs-controls {
+  display: none; /* shown only while #player-surface is the fullscreen element */
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+  flex-direction: column; gap: var(--space-2);
+  padding: var(--space-6) var(--space-5) var(--space-4);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.35) 60%, transparent);
+  opacity: 1; transition: opacity 0.25s ease;
+}
+#player-surface:fullscreen .fs-controls { display: flex; }
+#player-surface.fs-idle .fs-controls { opacity: 0; pointer-events: none; }
+#player-surface.fs-idle { cursor: none; }
+.fs-controls-row { display: flex; align-items: center; gap: var(--space-3); }
+.fs-controls .seek-range { width: 100%; accent-color: var(--color-accent); }
+.fs-controls .time-label { font-size: 12px; color: var(--color-neutral-200); min-width: 88px; }
+.fs-controls .speed-select { width: auto; min-height: unset; padding: 6px 8px; }
+.fs-note-popover { display: flex; align-items: center; gap: var(--space-2); }
+.fs-note-popover .fs-note-time {
+  font-size: 12px; color: var(--color-accent-300); font-family: monospace; flex: none;
+}
+.fs-note-popover .input { flex: 1; }
+
 .player-controls { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-neutral-800); }
 .controls-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
 .btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
