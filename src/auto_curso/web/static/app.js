@@ -1271,4 +1271,13 @@ setupMiniPlayerObserver();
   });
 })();
 
+/* ───────────────── collapsible sidebar ───────────────── */
+
+el("sidebar-toggle-btn").addEventListener("click", () => {
+  const sidebar = document.querySelector(".sidebar");
+  const collapsed = sidebar.classList.toggle("collapsed");
+  el("sidebar-toggle-icon").className = collapsed ? "ph ph-caret-right" : "ph ph-caret-left";
+  el("sidebar-toggle-btn").title = collapsed ? "Expandir barra lateral" : "Recolher barra lateral";
+});
+
 loadLibrary().catch((e) => showToast(e.message));
