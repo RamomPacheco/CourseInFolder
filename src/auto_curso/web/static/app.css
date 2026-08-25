@@ -135,6 +135,22 @@ i[class^="ph"] { line-height: 1; }
   .player-surface.is-mini { width: 200px; height: 112px; bottom: 12px; right: 12px; }
 }
 
+/* Native fullscreen doesn't strip author sizing constraints — without this,
+   aspect-ratio/max-height above keep the surface (and this overlay, anchored
+   to it) confined to a small strip instead of filling the screen. */
+#player-surface:fullscreen,
+#player-surface:-webkit-full-screen {
+  aspect-ratio: auto;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+}
+#player-surface:fullscreen video,
+#player-surface:-webkit-full-screen video {
+  height: 100%;
+  object-fit: contain;
+}
+
 /* — fullscreen overlay controls — */
 .fs-controls {
   display: none; /* shown only while #player-surface is the fullscreen element */
@@ -144,7 +160,8 @@ i[class^="ph"] { line-height: 1; }
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.35) 60%, transparent);
   opacity: 1; transition: opacity 0.25s ease;
 }
-#player-surface:fullscreen .fs-controls { display: flex; }
+#player-surface:fullscreen .fs-controls,
+#player-surface:-webkit-full-screen .fs-controls { display: flex; }
 #player-surface.fs-idle .fs-controls { opacity: 0; pointer-events: none; }
 #player-surface.fs-idle { cursor: none; }
 .fs-controls-row { display: flex; align-items: center; gap: var(--space-3); }
